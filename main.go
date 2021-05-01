@@ -27,4 +27,6 @@ func main() {
 	}
 
 	fmt.Println(token)
+
+	fmt.Println(mpesaService.Environment())
 }
