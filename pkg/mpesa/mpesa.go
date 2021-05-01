@@ -124,3 +124,15 @@ func (m *Mpesa) GetAccessToken() (string, error) {
 
 	return token, nil
 }
+
+// Environment returns the current environment the app is running on.
+// It will return either production or sandbox
+func (m *Mpesa) Environment() string {
+	environment := "production"
+
+	if !m.IsOnProduction {
+		environment = "sandbox"
+	}
+
+	return environment
+}
