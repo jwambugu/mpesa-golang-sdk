@@ -3,9 +3,11 @@ package mpesa
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/patrickmn/go-cache"
 	"gitlab.com/jwambugu/go-mpesa/pkg/config"
 	"io/ioutil"
 	"net/http"
+	"time"
 )
 
 type (
@@ -15,6 +17,7 @@ type (
 		ConsumerSecret string
 		BaseURL        string
 		IsOnProduction bool
+		Cache          *cache.Cache
 	}
 
 	// accessTokenResponse is the response sent back by Safaricom when we make a request to generate a token
@@ -36,11 +39,14 @@ func Init(c *config.Credentials, isOnProduction bool) *Mpesa {
 		baseUrl = "https://api.safaricom.co.ke"
 	}
 
+	newCache := cache.New(55*time.Minute, 10*time.Minute)
+
 	return &Mpesa{
 		ConsumerKey:    c.ConsumerKey,
 		ConsumerSecret: c.ConsumerSecret,
 		BaseURL:        baseUrl,
 		IsOnProduction: isOnProduction,
+		Cache:          newCache,
 	}
 }
 
@@ -64,13 +70,25 @@ func makeRequest(req *http.Request) ([]byte, error) {
 		return nil, fmt.Errorf("mpesa.ReadBody:: %v", err)
 	}
 
-	//fmt.Println(fmt.Sprintf("[*] Response Body:: %s", string(body)))
+	fmt.Println(fmt.Sprintf("[*] Response Body:: %s", string(body)))
 	return body, nil
+}
+
+// cachedAccessToken returns the cached access token
+func (m *Mpesa) cachedAccessToken() (interface{}, bool) {
+	return m.Cache.Get(m.ConsumerKey)
 }
 
 // GetAccessToken returns a token to be used to authenticate an app.
 // This token should be used in all other subsequent requests to the APIs
+// GetAccessToken will also cache the access token for 55 minutes.
 func (m *Mpesa) GetAccessToken() (string, error) {
+	cachedToken, exists := m.cachedAccessToken()
+
+	if exists {
+		return cachedToken.(string), nil
+	}
+
 	url := fmt.Sprintf("%s/oauth/v1/generate?grant_type=client_credentials", m.BaseURL)
 
 	// Create a new http request
@@ -100,5 +118,9 @@ func (m *Mpesa) GetAccessToken() (string, error) {
 		return "", fmt.Errorf("mpesa.GetAccessToken.MpesaResponse:: %v", response.ErrorMessage)
 	}
 
-	return response.AccessToken, nil
+	token := response.AccessToken
+
+	m.Cache.Set(m.ConsumerKey, token, 55*time.Minute)
+
+	return token, nil
 }
