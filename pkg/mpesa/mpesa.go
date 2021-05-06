@@ -2,11 +2,16 @@ package mpesa
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/patrickmn/go-cache"
 	"gitlab.com/jwambugu/go-mpesa/pkg/config"
 	"io/ioutil"
+	"net"
 	"net/http"
+	"net/url"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -121,6 +126,15 @@ type (
 	}
 )
 
+var (
+	ErrInvalidBusinessShortCode = errors.New("mpesa: business shortcode must be 5 or more digits")
+	ErrInvalidPasskey           = errors.New("mpesa: passkey cannot be empty")
+	ErrInvalidAmount            = errors.New("mpesa: amount must be greater than 0")
+	ErrInvalidPhoneNumber       = errors.New("mpesa: phone number must be 12 digits and must be in international format")
+	ErrInvalidCallbackURL       = errors.New("mpesa: callback URL must be a valid URL or IP")
+	ErrInvalidReferenceCode     = errors.New("mpesa: reference code cannot be more than 13 characters")
+)
+
 // Init initializes a new Mpesa app that will be used to perform C2B or B2C transaction
 func Init(c *config.Credentials, isOnProduction bool) *Mpesa {
 	baseUrl := "https://sandbox.safaricom.co.ke"
@@ -227,6 +241,66 @@ func (m *Mpesa) Environment() string {
 	return environment
 }
 
-func (m *Mpesa) LipaNaMpesaOnline(s STKPushRequest) (LipaNaMpesaOnlineRequestResponse, error) {
-	return LipaNaMpesaOnlineRequestResponse{}, nil
+// isValidURL attempt to check if the value passed is a valid url or string
+func isValidURL(s string) (bool, error) {
+	rawURL, err := url.ParseRequestURI(s)
+
+	if err != nil {
+		return false, err
+	}
+
+	address := net.ParseIP(rawURL.Host)
+
+	if address == nil {
+		return strings.Contains(rawURL.Host, "."), nil
+	}
+
+	return true, nil
+}
+
+func (s *STKPushRequest) validateSTKPushRequest() error {
+	shortcode := strconv.Itoa(int(s.Shortcode))
+
+	if len(shortcode) == 0 {
+		return ErrInvalidBusinessShortCode
+	}
+
+	if len(s.Passkey) == 0 {
+		return ErrInvalidPasskey
+	}
+
+	if s.Amount <= 0 {
+		return ErrInvalidAmount
+	}
+
+	phoneNumber := strconv.Itoa(int(s.PhoneNumber))
+
+	if len(phoneNumber) != 12 || phoneNumber[:3] != "254" {
+		return ErrInvalidPhoneNumber
+	}
+
+	// Attempt to validate the callback URL
+	isValidURL, err := isValidURL(s.CallbackURL)
+
+	if err != nil {
+		return err
+	}
+
+	if !isValidURL {
+		return ErrInvalidCallbackURL
+	}
+
+	if len(s.ReferenceCode) > 13 {
+		return ErrInvalidReferenceCode
+	}
+
+	return nil
+}
+
+func (m *Mpesa) LipaNaMpesaOnline(s *STKPushRequest) (*LipaNaMpesaOnlineRequestResponse, error) {
+	if err := s.validateSTKPushRequest(); err != nil {
+		return nil, err
+	}
+
+	return nil, nil
 }
