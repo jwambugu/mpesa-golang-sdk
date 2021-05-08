@@ -1,6 +1,8 @@
 package mpesa
 
 import (
+	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,46 +37,46 @@ type (
 		ErrorMessage string `json:"errorMessage"`
 	}
 
-	// LipaNaMpesaOnlineRequestParameters has the parameters used initiate online payment on behalf of a customer.
-	LipaNaMpesaOnlineRequestParameters struct {
+	// lipaNaMpesaOnlineRequestParameters has the parameters used initiate online payment on behalf of a customer.
+	lipaNaMpesaOnlineRequestParameters struct {
 		// This is organizations shortcode (Paybill or Buygoods - A 5 to 7 digit account number) used to identify
 		// an organization and receive the transaction.
 		// Example Shortcode (5 to 7 digits) e.g. 654321
-		BusinessShortCode uint
+		BusinessShortCode uint `json:"BusinessShortCode"`
 		// 	This is the password used for encrypting the request sent: A base64 encoded string.
 		//	The base64 string is a combination of Shortcode+Passkey+Timestamp
-		Password string
+		Password string `json:"Password"`
 		// This is the Timestamp of the transaction in the format of YEAR+MONTH+DATE+HOUR+MINUTE+SECOND (YYYYMMDDHHmmss).
 		// Each part should be at least two digits apart from the year which takes four digits.
 		// Example 20060102150405
-		Timestamp string
+		Timestamp string `json:"Timestamp"`
 		// This is the transaction type that is used to identify the transaction when sending the request to M-Pesa.
 		// The transaction type for M-Pesa Express is "CustomerPayBillOnline"
 		// Accepted values are CustomerPayBillOnline or CustomerBuyGoodsOnline
-		TransactionType string
+		TransactionType string `json:"TransactionType"`
 		// This is the Amount transacted normally a numeric value.
 		// Money that customer pays to the Shortcode. Only whole numbers are supported.
-		Amount uint64
+		Amount uint64 `json:"Amount"`
 		// The phone number sending money. The parameter expected is a Valid Safaricom Mobile Number that is M-Pesa
 		// registered in the format 254XXXXXXXXX
-		PartyA uint64
+		PartyA uint64 `json:"PartyA"`
 		// The organization receiving the funds. The parameter expected is a 5 to 7 digit as defined on the Shortcode
 		// description above. This can be the same as BusinessShortCode value above.
-		PartyB uint
+		PartyB uint `json:"PartyB"`
 		// The Mobile Number to receive the STK Pin Prompt. This number can be the same as PartyA value above.
 		// Expected format is 254XXXXXXXXX
-		PhoneNumber uint64
+		PhoneNumber uint64 `json:"PhoneNumber"`
 		// A CallBack URL is a valid secure URL that is used to receive notifications from M-Pesa API.
 		// It is the endpoint to which the results will be sent by M-Pesa API.
 		// Example https://ip or domain:port/path (https://mydomain.com/path, https://0.0.0.0:9090/path)
-		CallBackURL string
+		CallBackURL string `json:"CallBackURL"`
 		// This is an Alpha-Numeric parameter that is defined by your system as an Identifier of the transaction for
 		// CustomerPayBillOnline transaction type. Along with the business name, this value is also displayed to the
 		// customer in the STK Pin Prompt message. Maximum of 12 characters.
-		AccountReference string
+		AccountReference string `json:"AccountReference"`
 		// This is any additional information/comment that can be sent along with the request from your system.
 		// Maximum of 13 Characters.
-		TransactionDesc string
+		TransactionDesc string `json:"TransactionDesc"`
 	}
 
 	// LipaNaMpesaOnlineRequestResponse is the response sent back by mpesa after initiating an STK push request.
@@ -95,7 +97,7 @@ type (
 		ResponseDescription string `json:"ResponseDescription"`
 		// This is a Numeric status code that indicates the status of the transaction submission.
 		// 0 means successful submission and any other code means an error occurred.
-		ResponseCode uint `json:"ResponseCode"`
+		ResponseCode string `json:"ResponseCode"`
 		// This is a message that your system can display to the Customer as an acknowledgement of the payment
 		// request submission. Example Success. Request accepted for processing.
 		CustomerMessage string `json:"CustomerMessage"`
@@ -107,12 +109,16 @@ type (
 		ErrorCode string `json:"errorCode"`
 		// This is a short descriptive message of the failure reason.
 		ErrorMessage string `json:"errorMessage"`
+		// IsSuccessful custom field to determine if the request went through
+		IsSuccessful bool
 	}
 
 	// STKPushRequest represents the data to be provided by the user for LipaNaMpesaOnlineRequestParameters
 	STKPushRequest struct {
 		// Paybill for the organisation
 		Shortcode uint
+		// Organization receiving funds. Can be same as Shortcode but different in case of till numbers.
+		PartyB uint
 		// This is key shared by safaricom after going live.
 		Passkey string
 		// Amount to be transacted. This is will be deducted from the customer.
@@ -123,16 +129,20 @@ type (
 		ReferenceCode string
 		// Endpoint to send the payment notifications.
 		CallbackURL string
+		// Any additional information/comment that can be sent along with the request.
+		TransactionDescription string
 	}
 )
 
 var (
-	ErrInvalidBusinessShortCode = errors.New("mpesa: business shortcode must be 5 or more digits")
-	ErrInvalidPasskey           = errors.New("mpesa: passkey cannot be empty")
-	ErrInvalidAmount            = errors.New("mpesa: amount must be greater than 0")
-	ErrInvalidPhoneNumber       = errors.New("mpesa: phone number must be 12 digits and must be in international format")
-	ErrInvalidCallbackURL       = errors.New("mpesa: callback URL must be a valid URL or IP")
-	ErrInvalidReferenceCode     = errors.New("mpesa: reference code cannot be more than 13 characters")
+	ErrInvalidBusinessShortCode      = errors.New("mpesa: business shortcode must be 5 or more digits")
+	ErrInvalidPartyB                 = errors.New("mpesa: party B must be must be 5 or more digits")
+	ErrInvalidPasskey                = errors.New("mpesa: passkey cannot be empty")
+	ErrInvalidAmount                 = errors.New("mpesa: amount must be greater than 0")
+	ErrInvalidPhoneNumber            = errors.New("mpesa: phone number must be 12 digits and must be in international format")
+	ErrInvalidCallbackURL            = errors.New("mpesa: callback URL must be a valid URL or IP")
+	ErrInvalidReferenceCode          = errors.New("mpesa: reference code cannot be more than 13 characters")
+	ErrInvalidTransactionDescription = errors.New("mpesa: transaction description cannot be more than 13 characters")
 )
 
 // Init initializes a new Mpesa app that will be used to perform C2B or B2C transaction
@@ -193,10 +203,10 @@ func (m *Mpesa) GetAccessToken() (string, error) {
 		return cachedToken.(string), nil
 	}
 
-	url := fmt.Sprintf("%s/oauth/v1/generate?grant_type=client_credentials", m.BaseURL)
+	endpoint := fmt.Sprintf("%s/oauth/v1/generate?grant_type=client_credentials", m.BaseURL)
 
 	// Create a new http request
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
 
 	if err != nil {
 		return "", fmt.Errorf("mpesa.GetAccessToken.NewRequest:: %v", err)
@@ -261,8 +271,14 @@ func isValidURL(s string) (bool, error) {
 func (s *STKPushRequest) validateSTKPushRequest() error {
 	shortcode := strconv.Itoa(int(s.Shortcode))
 
-	if len(shortcode) == 0 {
+	if len(shortcode) < 5 {
 		return ErrInvalidBusinessShortCode
+	}
+
+	partyB := strconv.Itoa(int(s.PartyB))
+
+	if len(partyB) < 5 {
+		return ErrInvalidPartyB
 	}
 
 	if len(s.Passkey) == 0 {
@@ -277,6 +293,10 @@ func (s *STKPushRequest) validateSTKPushRequest() error {
 
 	if len(phoneNumber) != 12 || phoneNumber[:3] != "254" {
 		return ErrInvalidPhoneNumber
+	}
+
+	if len(s.CallbackURL) == 0 {
+		return ErrInvalidCallbackURL
 	}
 
 	// Attempt to validate the callback URL
@@ -294,13 +314,123 @@ func (s *STKPushRequest) validateSTKPushRequest() error {
 		return ErrInvalidReferenceCode
 	}
 
+	if len(s.TransactionDescription) > 13 {
+		return ErrInvalidTransactionDescription
+	}
+
+	if len(s.TransactionDescription) == 0 {
+		s.TransactionDescription = "STK Push Transaction"
+	}
+
 	return nil
 }
 
+// generateSTKPushRequestPasswordAndTimestamp returns a base64 encoded password and the current timestamp
+func generateSTKPushRequestPasswordAndTimestamp(shortcode uint, passkey string) (string, string) {
+	timestamp := time.Now().Format("20060102150405")
+
+	passwordToEncode := fmt.Sprintf("%d%s%s", shortcode, passkey, timestamp)
+
+	encodedPassword := base64.StdEncoding.EncodeToString([]byte(passwordToEncode))
+
+	return encodedPassword, timestamp
+}
+
+// getTheTransactionType determines the current transaction type.
+// This is made by checking if the shortcode matches the partyB, then this is a paybill transaction.
+// If they don't match, then this is a buy goods/till number transaction
+func getTheTransactionType(shortcode, partyB uint) string {
+	if shortcode != partyB {
+		return "CustomerBuyGoodsOnline"
+	}
+
+	return "CustomerPayBillOnline"
+}
+
+// lipaNaMpesaOnlineRequestBody creates the request payload
+func (s *STKPushRequest) lipaNaMpesaOnlineRequestBody() ([]byte, error) {
+	shortcode := s.Shortcode
+	partyB := s.PartyB
+
+	password, timestamp := generateSTKPushRequestPasswordAndTimestamp(shortcode, s.Passkey)
+
+	transactionType := getTheTransactionType(shortcode, partyB)
+
+	params := lipaNaMpesaOnlineRequestParameters{
+		BusinessShortCode: shortcode,
+		Password:          password,
+		Timestamp:         timestamp,
+		TransactionType:   transactionType,
+		Amount:            s.Amount,
+		PartyA:            s.PhoneNumber,
+		PartyB:            partyB,
+		PhoneNumber:       s.PhoneNumber,
+		CallBackURL:       s.CallbackURL,
+		AccountReference:  s.ReferenceCode,
+		TransactionDesc:   s.TransactionDescription,
+	}
+
+	requestBody, err := json.Marshal(params)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return requestBody, nil
+}
+
+// LipaNaMpesaOnline makes a request to pay via STk push.
+// Returns LipaNaMpesaOnlineRequestResponse and an error if any occurs
+// To check if the transaction was successful, use LipaNaMpesaOnlineRequestResponse.IsSuccessful
 func (m *Mpesa) LipaNaMpesaOnline(s *STKPushRequest) (*LipaNaMpesaOnlineRequestResponse, error) {
 	if err := s.validateSTKPushRequest(); err != nil {
 		return nil, err
 	}
 
-	return nil, nil
+	requestBody, err := s.lipaNaMpesaOnlineRequestBody()
+
+	if err != nil {
+		return nil, fmt.Errorf("mpesa.LipaNaMpesaOnline.CreateRequestBody:: %v", err)
+	}
+
+	endpoint := fmt.Sprintf("%s/mpesa/stkpush/v1/processrequest", m.BaseURL)
+
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewBuffer(requestBody))
+
+	if err != nil {
+		return nil, fmt.Errorf("mpesa.LipaNaMpesaOnline.CreateNewRequest:: %v", err)
+	}
+
+	accessToken, err := m.GetAccessToken()
+
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+
+	// Make the request
+	resp, err := makeRequest(req)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var response *LipaNaMpesaOnlineRequestResponse
+
+	if err := json.Unmarshal(resp, &response); err != nil {
+		return nil, fmt.Errorf("mpesa.LipaNaMpesaOnline.UnmarshalResponse:: %v", err)
+	}
+
+	// Set the transaction as successful by default
+	response.IsSuccessful = true
+
+	// Check if the request was processed successfully.
+	// We'll determine this if there's no error code
+	if response.ResponseCode != "" {
+		response.IsSuccessful = false
+	}
+
+	return response, nil
 }
