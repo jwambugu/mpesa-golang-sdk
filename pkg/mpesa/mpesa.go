@@ -83,10 +83,10 @@ type (
 	LipaNaMpesaOnlineRequestResponse struct {
 		// This is a global unique Identifier for any submitted payment request.
 		// Sample value 16813-1590513-1
-		MerchantRequestID string `json:"MerchantRequestID"`
+		MerchantRequestID string `json:"MerchantRequestID,omitempty"`
 		// This is a global unique identifier of the processed checkout transaction request.
 		// Sample value ws_CO_DMZ_12321_23423476
-		CheckoutRequestID string `json:"CheckoutRequestID"`
+		CheckoutRequestID string `json:"CheckoutRequestID,omitempty"`
 		// Response description is an acknowledgment message from the API that gives the status of the request.
 		// It usually maps to a specific ResponseCode value.
 		// It can be a Success submission message or an error description.
@@ -94,21 +94,21 @@ type (
 		// - The service request has failed
 		// - The service request has been accepted successfully.
 		// - Invalid Access Token.
-		ResponseDescription string `json:"ResponseDescription"`
+		ResponseDescription string `json:"ResponseDescription,omitempty"`
 		// This is a Numeric status code that indicates the status of the transaction submission.
 		// 0 means successful submission and any other code means an error occurred.
-		ResponseCode string `json:"ResponseCode"`
+		ResponseCode string `json:"ResponseCode,omitempty"`
 		// This is a message that your system can display to the Customer as an acknowledgement of the payment
 		// request submission. Example Success. Request accepted for processing.
-		CustomerMessage string `json:"CustomerMessage"`
+		CustomerMessage string `json:"CustomerMessage,omitempty"`
 		// This is a unique requestID for the payment request
-		RequestID string `json:"requestId"`
+		RequestID string `json:"requestId,omitempty"`
 		// This is a predefined code that indicates the reason for request failure.
 		// This is defined in the Response Error Details below.
 		// The error codes maps to specific error message as illustrated in the Response Error Details below.
-		ErrorCode string `json:"errorCode"`
+		ErrorCode string `json:"errorCode,omitempty"`
 		// This is a short descriptive message of the failure reason.
-		ErrorMessage string `json:"errorMessage"`
+		ErrorMessage string `json:"errorMessage,omitempty"`
 		// IsSuccessful custom field to determine if the request went through
 		IsSuccessful bool
 	}
@@ -131,6 +131,24 @@ type (
 		CallbackURL string
 		// Any additional information/comment that can be sent along with the request.
 		TransactionDescription string
+	}
+
+	// LipaNaMpesaOnlineCallback is the response sent back sent to the callback URL after making an STKPush request
+	LipaNaMpesaOnlineCallback struct {
+		Body struct {
+			StkCallback struct {
+				MerchantRequestID string `json:"MerchantRequestID"`
+				CheckoutRequestID string `json:"CheckoutRequestID"`
+				ResultCode        int    `json:"ResultCode"`
+				ResultDesc        string `json:"ResultDesc"`
+				CallbackMetadata  struct {
+					Item []struct {
+						Name  string      `json:"Name"`
+						Value interface{} `json:"Value,omitempty"`
+					} `json:"Item"`
+				} `json:"CallbackMetadata"`
+			} `json:"stkCallback"`
+		} `json:"Body"`
 	}
 )
 
@@ -428,7 +446,7 @@ func (m *Mpesa) LipaNaMpesaOnline(s *STKPushRequest) (*LipaNaMpesaOnlineRequestR
 
 	// Check if the request was processed successfully.
 	// We'll determine this if there's no error code
-	if response.ResponseCode != "" {
+	if response.ErrorCode != "" {
 		response.IsSuccessful = false
 	}
 
