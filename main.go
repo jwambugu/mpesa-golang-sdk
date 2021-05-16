@@ -3,8 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/jwambugu/mpesa-golang-sdk/pkg/config"
-	"github.com/jwambugu/mpesa-golang-sdk/pkg/mpesa"
+	"github.com/jwambugu/mpesa-golang-sdk/config"
+	"github.com/jwambugu/mpesa-golang-sdk/mpesa"
 
 	"io/ioutil"
 	"log"
