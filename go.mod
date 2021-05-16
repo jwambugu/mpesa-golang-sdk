@@ -1,4 +1,4 @@
-module github.com/jwambugu/go-mpesa
+module github.com/jwambugu/mpesa-golang
 
 go 1.15
 

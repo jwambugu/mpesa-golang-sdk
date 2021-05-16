@@ -6,7 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/jwambugu/go-mpesa/pkg/config"
+	"github.com/jwambugu/mpesa-golang/pkg/config"
+
 	"github.com/patrickmn/go-cache"
 	"io/ioutil"
 	"net"
