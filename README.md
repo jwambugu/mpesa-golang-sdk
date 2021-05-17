@@ -9,20 +9,33 @@ In order to use the package, you will need to first create an account at [Daraja
 Once your account has been created, create a test app or switch to a company and select the app to use. Update
 your `.env` with the credentials of the selected app.
 
+## Environment Variables
+
 Create `.env` file if none exists
 
 ```bash
   touch .env
 ```
 
-Fill in the environment variables.
+Add the following environment variables to your .env file
 
-```
-MPESA_C2B_CONSUMER_KEY=
-MPESA_C2B_CONSUMER_SECRET=
-MPESA_C2B_SHORTCODE=
-MPESA_C2B_PASSKEY=
-```
+`MPESA_C2B_CONSUMER_KEY`
+
+`MPESA_C2B_CONSUMER_SECRET`
+
+`MPESA_C2B_SHORTCODE`
+
+`MPESA_C2B_PASSKEY`
+
+`MPESA_B2C_CONSUMER_KEY`
+
+`MPESA_B2C_CONSUMER_SECRET`
+
+`MPESA_B2C_SHORTCODE`
+
+`MPESA_B2C_INITIATOR_NAME`
+
+`MPESA_B2C_INITIATOR_PASSWORD`
 
 ## Installation
 
@@ -31,6 +44,8 @@ MPESA_C2B_PASSKEY=
 ```
 
 ## Usage/Examples
+
+Making Lipa na M-Pesa Online Payment (STK Push)
 
 ```go
 package main
@@ -54,9 +69,9 @@ func main() {
 
 	// Make the Lipa na Mpesa online request
 	response, err := mpesaApp.LipaNaMpesaOnline(&mpesa.STKPushRequest{
-		Shortcode:       conf.MpesaC2B.Shortcode.Shortcode,
-		PartyB:          conf.MpesaC2B.Shortcode.Shortcode,
-		Passkey:         conf.MpesaC2B.Shortcode.Passkey,
+		Shortcode:       conf.MpesaC2B.Shortcode,
+		PartyB:          conf.MpesaC2B.Shortcode,
+		Passkey:         conf.MpesaC2B.Passkey,
 		Amount:          200,
 		PhoneNumber:     254700000000,
 		ReferenceCode:   "nullable",
