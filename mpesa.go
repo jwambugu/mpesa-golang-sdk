@@ -2,8 +2,12 @@ package mpesa
 
 import (
 	"bytes"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"github.com/jwambugu/mpesa-golang-sdk/pkg/config"
@@ -12,6 +16,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -152,6 +157,66 @@ type (
 			} `json:"stkCallback"`
 		} `json:"Body"`
 	}
+
+	// b2cPaymentRequestRequestParameters are the parameters for the B2C API used to transact between an M-Pesa short
+	// code to a phone number registered on M-Pesa.
+	b2cPaymentRequestRequestParameters struct {
+		// The username of the M-Pesa B2C account API operator.
+		InitiatorName string `json:"InitiatorName"`
+		// This is the value obtained after encrypting the API initiator password.
+		SecurityCredential string `json:"SecurityCredential"`
+		// This is a unique command that specifies B2C transaction type.
+		// Possible values are:
+		// 1. SalaryPayment: This supports sending money to both registered and unregistered M-Pesa customers.
+		//2. BusinessPayment: This is a normal business to customer payment,  supports only M-Pesa registered customers.
+		//3. PromotionPayment: This is a promotional payment to customers.
+		// The M-Pesa notification message is a congratulatory message. Supports only M-Pesa registered customers.
+		CommandID string `json:"CommandID"`
+		// The amount of money being sent to the customer.
+		Amount uint64
+		// This is the B2C organization shortcode from which the money is to be sent.
+		PartyA uint
+		// This is the customer mobile number  to receive the amount.
+		// The number should have the country code (254) without the plus sign.
+		PartyB uint64
+		// Any additional information to be associated with the transaction. Sentence of upto 100 characters
+		Remarks string
+		// This is the URL to be specified in your request that will be used by API Proxy to send notification in case
+		// the payment request is timed out while awaiting processing in the queue.
+		QueueTimeOutURL string
+		// This is the URL to be specified in your request that will be used by M-Pesa to send notification upon
+		// processing of the payment request.
+		ResultURL string
+		// Any additional information to be associated with the transaction. Sentence of upto 100 characters
+		Occassion string
+	}
+
+	// B2CPaymentRequest is the data to be used to make B2C Payment Request
+	B2CPaymentRequest struct {
+		// The username of the M-Pesa B2C account API operator.
+		InitiatorName string
+		// The password of the M-Pesa B2C account API operator.
+		InitiatorPassword string
+		// This is a unique command that specifies B2C transaction type.
+		CommandID string
+		// The amount of money being sent to the customer.
+		Amount uint64
+		// This is the B2C organization shortcode from which the money is to be sent.
+		Shortcode uint
+		// This is the customer mobile number  to receive the amount.
+		// The number should have the country code (254) without the plus sign.
+		PhoneNumber uint64
+		// Any additional information to be associated with the transaction. Sentence of upto 100 characters
+		Remarks string
+		// This is the URL to be specified in your request that will be used by API Proxy to send notification in case
+		// the payment request is timed out while awaiting processing in the queue.
+		QueueTimeOutURL string
+		// This is the URL to be specified in your request that will be used by M-Pesa to send notification upon
+		// processing of the payment request.
+		ResultURL string
+		// Any additional information to be associated with the transaction. Sentence of upto 100 characters
+		Occasion string
+	}
 )
 
 var (
@@ -214,10 +279,10 @@ func (m *Mpesa) cachedAccessToken() (interface{}, bool) {
 	return m.Cache.Get(m.ConsumerKey)
 }
 
-// GetAccessToken returns a token to be used to authenticate an app.
+// getAccessToken returns a token to be used to authenticate an app.
 // This token should be used in all other subsequent requests to the APIs
-// GetAccessToken will also cache the access token for 55 minutes.
-func (m *Mpesa) GetAccessToken() (string, error) {
+// getAccessToken will also cache the access token for 55 minutes.
+func (m *Mpesa) getAccessToken() (string, error) {
 	cachedToken, exists := m.cachedAccessToken()
 
 	if exists {
@@ -289,6 +354,7 @@ func isValidURL(s string) (bool, error) {
 	return true, nil
 }
 
+// validateSTKPushRequest attempt to validate the request before processing it
 func (s *STKPushRequest) validateSTKPushRequest() error {
 	shortcode := strconv.Itoa(int(s.Shortcode))
 
@@ -366,13 +432,13 @@ func generateSTKPushRequestPasswordAndTimestamp(shortcode uint, passkey string) 
 // getTheTransactionType determines the current transaction type.
 // This is made by checking if the shortcode matches the partyB, then this is a paybill transaction.
 // If they don't match, then this is a buy goods/till number transaction
-func getTheTransactionType(shortcode, partyB uint) string {
-	if shortcode != partyB {
-		return "CustomerBuyGoodsOnline"
-	}
-
-	return "CustomerPayBillOnline"
-}
+//func getTheTransactionType(shortcode, partyB uint) string {
+//	if shortcode != partyB {
+//		return "CustomerBuyGoodsOnline"
+//	}
+//
+//	return "CustomerPayBillOnline"
+//}
 
 // lipaNaMpesaOnlineRequestBody creates the request payload
 func (s *STKPushRequest) lipaNaMpesaOnlineRequestBody() ([]byte, error) {
@@ -426,7 +492,7 @@ func (m *Mpesa) LipaNaMpesaOnline(s *STKPushRequest) (*LipaNaMpesaOnlineRequestR
 		return nil, fmt.Errorf("mpesa.LipaNaMpesaOnline.CreateNewRequest:: %v", err)
 	}
 
-	accessToken, err := m.GetAccessToken()
+	accessToken, err := m.getAccessToken()
 
 	if err != nil {
 		return nil, err
@@ -458,4 +524,120 @@ func (m *Mpesa) LipaNaMpesaOnline(s *STKPushRequest) (*LipaNaMpesaOnlineRequestR
 	}
 
 	return response, nil
+}
+
+// certificatePath returns the path to the certificate to be used to encrypt the security credential
+func certificatePath(isOnProduction bool) string {
+	if !isOnProduction {
+		return "./certificates/sandbox.cer"
+	}
+
+	return "./certificates/production.cer"
+}
+
+// getSecurityCredentials return Base64 encoded string of the B2C short code and password
+// which is encrypted using M-Pesa public key and validates the transaction on M-Pesa Core system.
+func (b *B2CPaymentRequest) getSecurityCredentials(isOnProduction bool) (string, error) {
+	certificate := certificatePath(isOnProduction)
+
+	file, err := os.Open(certificate)
+
+	if err != nil {
+		return "", fmt.Errorf("mpesa.getSecurityCredentials.OpenCertificate:: %v", err)
+	}
+
+	publicKey, err := ioutil.ReadAll(file)
+
+	if err != nil {
+		return "", fmt.Errorf("mpesa.getSecurityCredentials.ReadCertificateContents:: %v", err)
+	}
+
+	block, _ := pem.Decode(publicKey)
+
+	var cert *x509.Certificate
+
+	cert, err = x509.ParseCertificate(block.Bytes)
+
+	if err != nil {
+		return "", fmt.Errorf("mpesa.getSecurityCredentials.ParseCertificate:: %v", err)
+	}
+
+	rsaPublicKey := cert.PublicKey.(*rsa.PublicKey)
+
+	reader := rand.Reader
+
+	encrypted, err := rsa.EncryptPKCS1v15(reader, rsaPublicKey, []byte(b.InitiatorPassword))
+
+	if err != nil {
+		return "", fmt.Errorf("mpesa.getSecurityCredentials.EncryptCredentials:: %v", err)
+	}
+
+	securityCredentials := base64.StdEncoding.EncodeToString(encrypted)
+	return securityCredentials, nil
+}
+
+// b2cPaymentRequestBody returns payload to be used as the request body
+func (b *B2CPaymentRequest) b2cPaymentRequestBody(isOnProduction bool) ([]byte, error) {
+	securityCredentials, err := b.getSecurityCredentials(isOnProduction)
+
+	if err != nil {
+		return nil, err
+	}
+
+	params := b2cPaymentRequestRequestParameters{
+		InitiatorName:      b.InitiatorName,
+		SecurityCredential: securityCredentials,
+		CommandID:          b.CommandID,
+		Amount:             b.Amount,
+		PartyA:             b.Shortcode,
+		PartyB:             b.PhoneNumber,
+		Remarks:            b.Remarks,
+		QueueTimeOutURL:    b.QueueTimeOutURL,
+		ResultURL:          b.ResultURL,
+		Occassion:          b.Occasion,
+	}
+
+	requestBody, err := json.Marshal(params)
+
+	if err != nil {
+		return nil, fmt.Errorf("mpesa.b2cPaymentRequestBody.MarshalRequestBody:: %v", err)
+	}
+
+	return requestBody, nil
+}
+
+// B2CPayment initiates a B2C request to be used to send money the customer
+func (m *Mpesa) B2CPayment(b *B2CPaymentRequest) (*B2CPaymentRequest, error) {
+	requestBody, err := b.b2cPaymentRequestBody(m.IsOnProduction)
+
+	if err != nil {
+		return nil, err
+	}
+
+	endpoint := fmt.Sprintf("%s/mpesa/b2c/v1/paymentrequest", m.BaseURL)
+
+	// Create a new request
+	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewBuffer(requestBody))
+
+	if err != nil {
+		return nil, fmt.Errorf("mpesa.B2CPayment.CreateNewRequest:: %v", err)
+	}
+
+	// Generate an access token
+	accessToken, err := m.getAccessToken()
+
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", "application/json")
+	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+
+	_, err = makeRequest(req)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return b, nil
 }
