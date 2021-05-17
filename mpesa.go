@@ -345,8 +345,7 @@ func (s *STKPushRequest) validateSTKPushRequest() error {
 
 	transactionType := s.TransactionType
 
-	if len(transactionType) == 0 || transactionType != "CustomerPayBillOnline" ||
-		transactionType != "CustomerBuyGoodsOnline" {
+	if transactionType != "CustomerPayBillOnline" && transactionType != "CustomerBuyGoodsOnline" {
 		return ErrInvalidTransactionType
 	}
 

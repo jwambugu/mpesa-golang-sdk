@@ -54,13 +54,14 @@ func main() {
 
 	// Make the Lipa na Mpesa online request
 	response, err := mpesaApp.LipaNaMpesaOnline(&mpesa.STKPushRequest{
-		Shortcode:     conf.MpesaC2B.Shortcode.Shortcode,
-		PartyB:        conf.MpesaC2B.Shortcode.Shortcode,
-		Passkey:       conf.MpesaC2B.Shortcode.Passkey,
-		Amount:        200,
-		PhoneNumber:   254700000000,
-		ReferenceCode: "nullable",
-		CallbackURL:   "https://local.test", // Add your callback URL here
+		Shortcode:       conf.MpesaC2B.Shortcode.Shortcode,
+		PartyB:          conf.MpesaC2B.Shortcode.Shortcode,
+		Passkey:         conf.MpesaC2B.Shortcode.Passkey,
+		Amount:          200,
+		PhoneNumber:     254700000000,
+		ReferenceCode:   "nullable",
+		CallbackURL:     "https://local.test", // Add your callback URL here
+		TransactionType: "",                   // CustomerPayBillOnline or CustomerBuyGoodsOnline 
 	})
 
 	if err != nil {
