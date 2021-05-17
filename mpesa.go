@@ -131,6 +131,8 @@ type (
 		CallbackURL string
 		// Any additional information/comment that can be sent along with the request.
 		TransactionDescription string
+		// This is the type of transaction to be performed. Expects CustomerPayBillOnline or CustomerBuyGoodsOnline
+		TransactionType string
 	}
 
 	// LipaNaMpesaOnlineCallback is the response sent back sent to the callback URL after making an STKPush request
@@ -161,6 +163,7 @@ var (
 	ErrInvalidCallbackURL            = errors.New("mpesa: callback URL must be a valid URL or IP")
 	ErrInvalidReferenceCode          = errors.New("mpesa: reference code cannot be more than 13 characters")
 	ErrInvalidTransactionDescription = errors.New("mpesa: transaction description cannot be more than 13 characters")
+	ErrInvalidTransactionType        = errors.New("mpesa: invalid transaction type provided")
 )
 
 // Init initializes a new Mpesa app that will be used to perform C2B or B2C transaction
@@ -340,6 +343,13 @@ func (s *STKPushRequest) validateSTKPushRequest() error {
 		s.TransactionDescription = "STK Push Transaction"
 	}
 
+	transactionType := s.TransactionType
+
+	if len(transactionType) == 0 || transactionType != "CustomerPayBillOnline" ||
+		transactionType != "CustomerBuyGoodsOnline" {
+		return ErrInvalidTransactionType
+	}
+
 	return nil
 }
 
@@ -372,13 +382,11 @@ func (s *STKPushRequest) lipaNaMpesaOnlineRequestBody() ([]byte, error) {
 
 	password, timestamp := generateSTKPushRequestPasswordAndTimestamp(shortcode, s.Passkey)
 
-	transactionType := getTheTransactionType(shortcode, partyB)
-
 	params := lipaNaMpesaOnlineRequestParameters{
 		BusinessShortCode: shortcode,
 		Password:          password,
 		Timestamp:         timestamp,
-		TransactionType:   transactionType,
+		TransactionType:   s.TransactionType,
 		Amount:            s.Amount,
 		PartyA:            s.PhoneNumber,
 		PartyB:            partyB,
