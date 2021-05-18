@@ -1,7 +1,7 @@
-# mpesa-golang-sdk
+# About Mpesa Golang SDK
 
-mpesa-golang-sdk is and SDK for intergrating M-pesa into your golang project. The package currently includes the Lipa Na
-Mpesa integration. More API will be added soon.
+Mpesa golang sdk is an SDK for integrating M-pesa APIS into your golang project. The package currently includes the Lipa
+Na Mpesa integration and B2C APIs. More APIs will be added soon.
 
 ## Getting Started
 
@@ -45,7 +45,9 @@ Add the following environment variables to your .env file
 
 ## Usage/Examples
 
-Making Lipa na M-Pesa Online Payment (STK Push)
+### Lipa na M-Pesa Online Payment (STK Push)
+
+Lipa na M-Pesa Online Payment API is used to initiate a M-Pesa transaction on behalf of a customer using STK Push.
 
 ```go
 package main
@@ -86,6 +88,57 @@ func main() {
 	// Check if the request was successful
 	if response.IsSuccessful {
 		// Handle your successful logic here 
+	}
+}
+```
+
+### Using B2C API
+
+This API enables Business to Customer (B2C) transactions between a company and customers who are the end-users of its
+products or services.
+
+```go
+package main
+
+import (
+	"github.com/jwambugu/mpesa-golang-sdk"
+	"github.com/jwambugu/mpesa-golang-sdk/pkg/config"
+	"log"
+)
+
+func main() {
+	// Get the mpesa configuration
+	conf, err := config.Get()
+
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	// Initialize a new mpesa app
+	mpesaApp := mpesa.Init(conf.MpesaB2C.Credentials, true)
+
+	b2c := conf.MpesaB2C
+
+	response, err := mpesaApp.B2CPayment(&mpesa.B2CPaymentRequest{
+		InitiatorName:     b2c.InitiatorName,
+		InitiatorPassword: b2c.InitiatorPassword,
+		CommandID:         "BusinessPayment", // SalaryPayment or BusinessPayment or PromotionPayment
+		Amount:            200,
+		Shortcode:         b2c.Shortcode,
+		PhoneNumber:       254700000000,
+		Remarks:           "Test",
+		QueueTimeOutURL:   "https://local.test",
+		ResultURL:         "https://local.test",
+		Occasion:          "Test",
+	})
+
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	// Check if the request was successful
+	if response.IsSuccessful {
+		// Handle your successful logic here
 	}
 }
 ```
