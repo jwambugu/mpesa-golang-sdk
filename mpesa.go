@@ -114,7 +114,8 @@ type (
 		ErrorCode string `json:"errorCode,omitempty"`
 		// This is a short descriptive message of the failure reason.
 		ErrorMessage string `json:"errorMessage,omitempty"`
-		// IsSuccessful custom field to determine if the request went through
+		// IsSuccessful custom field to determine if the request was processed successfully
+		// without any errors
 		IsSuccessful bool
 	}
 
@@ -216,6 +217,30 @@ type (
 		ResultURL string
 		// Any additional information to be associated with the transaction. Sentence of upto 100 characters
 		Occasion string
+	}
+
+	// B2CPaymentRequestResponse is the response sent back by mpesa after making a B2CPaymentRequest
+	B2CPaymentRequestResponse struct {
+		// This is a global unique identifier for the transaction request returned by the API
+		// proxy upon successful request submission. Sample value AG_2376487236_126732989KJHJKH
+		OriginatorConversationId string `json:"OriginatorConversationId,omitempty"`
+		// This is a global unique identifier for the transaction request returned by the M-Pesa upon successful
+		// request submission. Sample value 236543-276372-2
+		ConversationId string `json:"ConversationId,omitempty"`
+		// This is the description of the request submission status.
+		// Sample - Accept the service request successfully
+		ResponseDescription string `json:"ResponseDescription,omitempty"`
+		// This is a unique requestID for the payment request
+		RequestID string `json:"requestId,omitempty"`
+		// This is a predefined code that indicates the reason for request failure.
+		// This is defined in the Response Error Details below.
+		// The error codes maps to specific error message as illustrated in the Response Error Details below.
+		ErrorCode string `json:"errorCode,omitempty"`
+		// This is a short descriptive message of the failure reason.
+		ErrorMessage string `json:"errorMessage,omitempty"`
+		// IsSuccessful custom field to determine if the request was processed successfully
+		// without any errors
+		IsSuccessful bool
 	}
 )
 
@@ -514,7 +539,7 @@ func (m *Mpesa) LipaNaMpesaOnline(s *STKPushRequest) (*LipaNaMpesaOnlineRequestR
 		return nil, fmt.Errorf("mpesa.LipaNaMpesaOnline.UnmarshalResponse:: %v", err)
 	}
 
-	// Set the transaction as successful by default
+	// Set the request as successful by default
 	response.IsSuccessful = true
 
 	// Check if the request was processed successfully.
@@ -607,7 +632,7 @@ func (b *B2CPaymentRequest) b2cPaymentRequestBody(isOnProduction bool) ([]byte, 
 }
 
 // B2CPayment initiates a B2C request to be used to send money the customer
-func (m *Mpesa) B2CPayment(b *B2CPaymentRequest) (*B2CPaymentRequest, error) {
+func (m *Mpesa) B2CPayment(b *B2CPaymentRequest) (*B2CPaymentRequestResponse, error) {
 	requestBody, err := b.b2cPaymentRequestBody(m.IsOnProduction)
 
 	if err != nil {
@@ -633,11 +658,26 @@ func (m *Mpesa) B2CPayment(b *B2CPaymentRequest) (*B2CPaymentRequest, error) {
 	req.Header.Add("Content-Type", "application/json")
 	req.Header.Add("Authorization", fmt.Sprintf("Bearer %s", accessToken))
 
-	_, err = makeRequest(req)
+	resp, err := makeRequest(req)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return b, nil
+	response := &B2CPaymentRequestResponse{}
+
+	if err := json.Unmarshal(resp, &response); err != nil {
+		return nil, fmt.Errorf("mpesa.B2CPayment.UnmarshalResponse:: %v", err)
+	}
+
+	// Set the request as successful by default
+	response.IsSuccessful = true
+
+	// Check if the request was processed successfully.
+	// We'll determine this if there's no error code
+	if response.ErrorCode != "" {
+		response.IsSuccessful = false
+	}
+
+	return response, nil
 }
