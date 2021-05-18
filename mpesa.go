@@ -143,13 +143,29 @@ type (
 
 	// LipaNaMpesaOnlineCallback is the response sent back sent to the callback URL after making an STKPush request
 	LipaNaMpesaOnlineCallback struct {
+		// This is the root key for the entire Callback message.
 		Body struct {
+			// This is the first child of the Body.
 			StkCallback struct {
+				// This is a global unique Identifier for any submitted payment request.
+				// This is the same value returned in the acknowledgement message of the initial request.
 				MerchantRequestID string `json:"MerchantRequestID"`
+				// This is a global unique identifier of the processed checkout transaction request.
+				// This is the same value returned in the acknowledgement message of the initial request.
 				CheckoutRequestID string `json:"CheckoutRequestID"`
-				ResultCode        int    `json:"ResultCode"`
-				ResultDesc        string `json:"ResultDesc"`
-				CallbackMetadata  struct {
+				// This is a numeric status code that indicates the status of the transaction processing.
+				// 0 means successful processing and any other code means an error occurred or the transaction failed.
+				ResultCode int `json:"ResultCode"`
+				// Result description is a message from the API that gives the status of the request processing,
+				// usually maps to a specific ResultCode value.
+				// It can be a Success processing message or an error description message.
+				ResultDesc string `json:"ResultDesc"`
+				// This is the JSON object that holds more details for the transaction.
+				// It is only returned for Successful transaction.
+				CallbackMetadata struct {
+					// This is a JSON Array, within the CallbackMetadata, that holds additional transaction details in
+					// JSON objects. Since this array is returned under the CallbackMetadata,
+					// it is only returned for Successful transaction.
 					Item []struct {
 						Name  string      `json:"Name"`
 						Value interface{} `json:"Value,omitempty"`
@@ -241,6 +257,48 @@ type (
 		// IsSuccessful custom field to determine if the request was processed successfully
 		// without any errors
 		IsSuccessful bool
+	}
+
+	// B2CPaymentRequestCallback this is a payload sent to the callback URL after making a B2CPaymentRequest
+	B2CPaymentRequestCallback struct {
+		// This is the root parameter that encloses the entire result message.
+		Result struct {
+			// This is a status code that indicates whether the transaction was already sent to your listener.
+			// Usual value is 0.
+			ResultType int `json:"ResultType"`
+			// This is a numeric status code that indicates the status of the transaction processing.
+			// 0 means success and any other code means an error occurred or the transaction failed.
+			ResultCode int `json:"ResultCode"`
+			// This is a message from the API that gives the status of the request processing and usually maps
+			// to a specific result code value.
+			// Samples are - Service request is has bee accepted successfully
+			//				- Initiator information is invalid
+			ResultDesc string `json:"ResultDesc"`
+			// This is a global unique identifier for the transaction request returned by the API proxy upon
+			// successful request submission.
+			OriginatorConversationID string `json:"OriginatorConversationID"`
+			// This is a global unique identifier for the transaction request returned by the M-Pesa upon
+			// successful request submission.
+			ConversationID string `json:"ConversationID"`
+			// This is a unique M-PESA transaction ID for every payment request.
+			// Same value is sent to customer over SMS upon successful processing.
+			TransactionID string `json:"TransactionID"`
+			// This is a JSON object that holds more details for the transaction.
+			ResultParameters struct {
+				// This is a JSON array within the ResultParameters that holds additional transaction details as
+				// JSON objects.
+				ResultParameter []struct {
+					Key   string      `json:"Key"`
+					Value interface{} `json:"Value"`
+				} `json:"ResultParameter"`
+			} `json:"ResultParameters"`
+			ReferenceData struct {
+				ReferenceItem struct {
+					Key   string `json:"Key"`
+					Value string `json:"Value"`
+				} `json:"ReferenceItem"`
+			} `json:"ReferenceData"`
+		} `json:"Result"`
 	}
 )
 
