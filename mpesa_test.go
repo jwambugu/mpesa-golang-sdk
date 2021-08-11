@@ -2,6 +2,7 @@ package mpesa
 
 import (
 	"encoding/json"
+	"github.com/jwambugu/mpesa-golang-sdk/pkg/config"
 	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/http/httptest"
@@ -70,7 +71,7 @@ func TestMpesa_Environment(t *testing.T) {
 
 			environment := newMpesa.Environment()
 
-			assert.NotNil(t, environment)
+			assert.NotEmpty(t, environment)
 			assert.Equal(t, tc.expectedEnvironment, environment)
 		})
 	}
@@ -125,4 +126,52 @@ func TestMakeRequest(t *testing.T) {
 	err = json.Unmarshal(response, &responseBody)
 	assert.NoError(t, err)
 	assert.Equal(t, expected, responseBody)
+}
+
+func TestMpesa_getAccessToken(t *testing.T) {
+	conf := newTestConfig(t)
+
+	testCases := []struct {
+		name        string
+		credentials *config.Credentials
+		isValid     bool
+	}{
+		{
+			name:        "HasValidCredentials",
+			credentials: conf.MpesaC2B.Credentials,
+			isValid:     true,
+		},
+		{
+			name: "HasInvalidCredentials",
+			credentials: &config.Credentials{
+				ConsumerKey:    "",
+				ConsumerSecret: "",
+			},
+			isValid: false,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			m := Init(tc.credentials, false)
+
+			token, err := m.getAccessToken()
+
+			cachedToken, exists := m.cachedAccessToken()
+
+			if !tc.isValid {
+				assert.Error(t, err)
+				assert.Empty(t, token)
+
+				assert.False(t, exists)
+				assert.Empty(t, cachedToken)
+				return
+			}
+
+			assert.NoError(t, err)
+			assert.NotEmpty(t, token)
+			assert.True(t, exists)
+			assert.NotEmpty(t, cachedToken)
+		})
+	}
 }
