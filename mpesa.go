@@ -314,12 +314,17 @@ var (
 	ErrInvalidTransactionType        = errors.New("mpesa: invalid transaction type provided")
 )
 
+const (
+	SandboxBaseURL    = "https://sandbox.safaricom.co.ke"
+	ProductionBaseURL = "https://api.safaricom.co.ke"
+)
+
 // Init initializes a new Mpesa app that will be used to perform C2B or B2C transaction
 func Init(c *config.Credentials, isOnProduction bool) *Mpesa {
-	baseUrl := "https://sandbox.safaricom.co.ke"
+	baseUrl := SandboxBaseURL
 
 	if isOnProduction {
-		baseUrl = "https://api.safaricom.co.ke"
+		baseUrl = ProductionBaseURL
 	}
 
 	newCache := cache.New(55*time.Minute, 10*time.Minute)
