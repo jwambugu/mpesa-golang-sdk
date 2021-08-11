@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"github.com/jwambugu/mpesa-golang-sdk/pkg/config"
 	"github.com/patrickmn/go-cache"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -350,7 +351,9 @@ func makeRequest(req *http.Request) ([]byte, error) {
 		return nil, fmt.Errorf("mpesa.MakeRequest:: %v", err)
 	}
 
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
 
 	body, err := ioutil.ReadAll(resp.Body)
 
@@ -358,7 +361,7 @@ func makeRequest(req *http.Request) ([]byte, error) {
 		return nil, fmt.Errorf("mpesa.ReadBody:: %v", err)
 	}
 
-	fmt.Println(fmt.Sprintf("[*] Response Body:: %s", string(body)))
+	//fmt.Println(fmt.Sprintf("[*] Response Body:: %s", string(body)))
 	return body, nil
 }
 
