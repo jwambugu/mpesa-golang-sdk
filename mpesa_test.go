@@ -1,7 +1,10 @@
 package mpesa
 
 import (
+	"encoding/json"
 	"github.com/stretchr/testify/assert"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 )
 
@@ -71,4 +74,55 @@ func TestMpesa_Environment(t *testing.T) {
 			assert.Equal(t, tc.expectedEnvironment, environment)
 		})
 	}
+}
+
+func TestIsValidURL(t *testing.T) {
+	testCases := []struct {
+		url     string
+		isValid bool
+	}{
+		{url: SandboxBaseURL, isValid: true},
+		{url: ProductionBaseURL, isValid: true},
+		{url: "localhost", isValid: false},
+		{url: "mpesa.test", isValid: false},
+		{url: "https://jwambugu.com:9340", isValid: true},
+	}
+
+	for _, tc := range testCases {
+		isValid, err := isValidURL(tc.url)
+
+		if !tc.isValid {
+			assert.Error(t, err)
+			assert.Equal(t, tc.isValid, isValid)
+			assert.False(t, isValid)
+			continue
+		}
+
+		assert.NoError(t, err)
+		assert.Equal(t, tc.isValid, isValid)
+		assert.True(t, isValid)
+	}
+}
+
+func TestMakeRequest(t *testing.T) {
+	expected := map[string]string{
+		"name": "test",
+	}
+
+	svr := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(expected)
+	}))
+
+	req, err := http.NewRequest(http.MethodPost, svr.URL, nil)
+
+	response, err := makeRequest(req)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, response)
+	assert.Equal(t, "application/json", req.Header.Get("Accept"))
+
+	var responseBody map[string]string
+
+	err = json.Unmarshal(response, &responseBody)
+	assert.NoError(t, err)
+	assert.Equal(t, expected, responseBody)
 }
