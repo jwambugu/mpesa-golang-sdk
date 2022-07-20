@@ -10,7 +10,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/patrickmn/go-cache"
 	"io"
 	"io/ioutil"
 	"net"
@@ -34,26 +33,28 @@ func (e Environment) IsProduction() bool {
 	return e == Production
 }
 
+type HttpClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
 type (
 	// Mpesa is an app to make a transaction
 	Mpesa struct {
+		client      HttpClient
+		environment Environment
+
 		consumerKey    string
 		consumerSecret string
-		baseURL        string
-		environment    Environment
-		cache          *cache.Cache
 
-		client http.Client
+		authURL    string
+		stkPushURL string
+		b2cURL     string
 	}
 
-	// mpesaAccessTokenResponse is the response sent back by Safaricom when we make a request to generate a token
-	// for a specific app
-	mpesaAccessTokenResponse struct {
-		AccessToken  string `json:"access_token"`
-		ExpiresIn    string `json:"expires_in"`
-		RequestID    string `json:"requestId"`
-		ErrorCode    string `json:"errorCode"`
-		ErrorMessage string `json:"errorMessage"`
+	// AuthorizationResponse is returned when trying to authenticate the app using provided credentials
+	AuthorizationResponse struct {
+		AccessToken string `json:"access_token"`
+		ExpiresIn   string `json:"expires_in"`
 	}
 
 	// lipaNaMpesaOnlineRequestParameters has the parameters used initiate online payment on behalf of a customer.
@@ -118,7 +119,7 @@ type (
 		// 0 means successful submission and any other code means an error occurred.
 		ResponseCode string `json:"ResponseCode,omitempty"`
 		// This is a message that your system can display to the Customer as an acknowledgement of the payment
-		// request submission. Example Success. Request accepted for processing.
+		// request submission. Example Success. MockRequest accepted for processing.
 		CustomerMessage string `json:"CustomerMessage,omitempty"`
 		// This is a unique requestID for the payment request
 		RequestID string `json:"requestId,omitempty"`
@@ -222,7 +223,7 @@ type (
 		Occassion string
 	}
 
-	// B2CPaymentRequest is the data to be used to make B2C Payment Request
+	// B2CPaymentRequest is the data to be used to make B2C Payment MockRequest
 	B2CPaymentRequest struct {
 		// The username of the M-Pesa B2C account API operator.
 		InitiatorName string
@@ -334,7 +335,7 @@ const (
 )
 
 // NewApp initializes a new Mpesa app that will be used to perform C2B or B2C transaction
-func NewApp(c *http.Client, consumerKey, consumerSecret string, env Environment) *Mpesa {
+func NewApp(c HttpClient, consumerKey, consumerSecret string, env Environment) *Mpesa {
 	if c == nil {
 		c = &http.Client{
 			Timeout: 10 * time.Second,
@@ -346,14 +347,12 @@ func NewApp(c *http.Client, consumerKey, consumerSecret string, env Environment)
 		baseUrl = ProductionBaseURL
 	}
 
-	newCache := cache.New(55*time.Minute, 10*time.Minute)
-
 	return &Mpesa{
+		client:         c,
+		environment:    env,
 		consumerKey:    consumerKey,
 		consumerSecret: consumerSecret,
-		baseURL:        baseUrl,
-		environment:    env,
-		cache:          newCache,
+		authURL:        baseUrl + `/oauth/v1/generate?grant_type=client_credentials`,
 	}
 }
 
@@ -383,55 +382,35 @@ func makeRequest(req *http.Request) ([]byte, error) {
 	return body, nil
 }
 
-// cachedAccessToken returns the cached access token
-func (m *Mpesa) cachedAccessToken() (interface{}, bool) {
-	return m.cache.Get(m.consumerKey)
-}
-
-// getAccessToken returns a token to be used to authenticate an app.
+// GenerateAccessToken returns a time bound access token to call allowed APIs.
 // This token should be used in all other subsequent requests to the APIs
-// getAccessToken will also cache the access token for 55 minutes.
-func (m *Mpesa) getAccessToken() (string, error) {
-	cachedToken, exists := m.cachedAccessToken()
-
-	if exists {
-		return cachedToken.(string), nil
-	}
-
-	endpoint := fmt.Sprintf("%s/oauth/v1/generate?grant_type=client_credentials", m.baseURL)
-
-	// Create a new http request
-	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
-
+// GenerateAccessToken will also cache the access token for the specified refresh after period
+func (m *Mpesa) GenerateAccessToken() (string, error) {
+	req, err := http.NewRequest(http.MethodGet, m.authURL, nil)
 	if err != nil {
-		return "", fmt.Errorf("mpesa.GetAccessToken.NewRequest:: %v", err)
+		return "", fmt.Errorf("mpesa: error creating authorization http request - %v", err)
 	}
 
-	// Set the basic auth header
 	req.SetBasicAuth(m.consumerKey, m.consumerSecret)
 
-	resp, err := makeRequest(req)
-
+	res, err := m.client.Do(req)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("mpesa: error making authorization http request - %v", err)
 	}
 
-	var response mpesaAccessTokenResponse
+	//goland:noinspection GoUnhandledErrorResult
+	defer res.Body.Close()
 
-	if err := json.Unmarshal(resp, &response); err != nil {
-		return "", fmt.Errorf("mpesa.GetAccessToken.UnmarshalResponse:: %v", err)
+	if res.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("mpesa: authorization request failed with status - %v", res.Status)
 	}
 
-	// Check if the authentication passed. If it did, we won't have any error code
-	if response.ErrorCode != "" {
-		return "", fmt.Errorf("mpesa.GetAccessToken.MpesaResponse:: %v", response.ErrorMessage)
+	var response AuthorizationResponse
+	if err := json.NewDecoder(res.Body).Decode(&response); err != nil {
+		return "", fmt.Errorf("mpesa: error decoding authorization response - %v", err.Error())
 	}
 
-	token := response.AccessToken
-
-	m.cache.Set(m.consumerKey, token, 55*time.Minute)
-
-	return token, nil
+	return response.AccessToken, nil
 }
 
 // Environment returns the current environment the app is running on.
@@ -587,15 +566,13 @@ func (m *Mpesa) LipaNaMpesaOnline(s *STKPushRequest) (*LipaNaMpesaOnlineRequestR
 		return nil, fmt.Errorf("mpesa.LipaNaMpesaOnline.CreateRequestBody:: %v", err)
 	}
 
-	endpoint := fmt.Sprintf("%s/mpesa/stkpush/v1/processrequest", m.baseURL)
-
-	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewBuffer(requestBody))
+	req, err := http.NewRequest(http.MethodPost, m.stkPushURL, bytes.NewBuffer(requestBody))
 
 	if err != nil {
 		return nil, fmt.Errorf("mpesa.LipaNaMpesaOnline.CreateNewRequest:: %v", err)
 	}
 
-	accessToken, err := m.getAccessToken()
+	accessToken, err := m.GenerateAccessToken()
 
 	if err != nil {
 		return nil, err
@@ -717,17 +694,15 @@ func (m *Mpesa) B2CPayment(b *B2CPaymentRequest) (*B2CPaymentRequestResponse, er
 		return nil, err
 	}
 
-	endpoint := fmt.Sprintf("%s/mpesa/b2c/v1/paymentrequest", m.baseURL)
-
 	// Create a new request
-	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewBuffer(requestBody))
+	req, err := http.NewRequest(http.MethodPost, m.b2cURL, bytes.NewBuffer(requestBody))
 
 	if err != nil {
 		return nil, fmt.Errorf("mpesa.B2CPayment.CreateNewRequest:: %v", err)
 	}
 
 	// Generate an access token
-	accessToken, err := m.getAccessToken()
+	accessToken, err := m.GenerateAccessToken()
 
 	if err != nil {
 		return nil, err
