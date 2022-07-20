@@ -10,8 +10,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/jwambugu/mpesa-golang-sdk/pkg/config"
-	"github.com/patrickmn/go-cache"
 	"io"
 	"io/ioutil"
 	"net"
@@ -20,288 +18,46 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
-type (
-	// Mpesa is an app to make a transaction
-	Mpesa struct {
-		ConsumerKey    string
-		ConsumerSecret string
-		BaseURL        string
-		IsOnProduction bool
-		Cache          *cache.Cache
-	}
+// Environment indicates the current mode the application is running on. Either Sandbox or Production.
+type Environment string
 
-	// mpesaAccessTokenResponse is the response sent back by Safaricom when we make a request to generate a token
-	// for a specific app
-	mpesaAccessTokenResponse struct {
-		AccessToken  string `json:"access_token"`
-		ExpiresIn    string `json:"expires_in"`
-		RequestID    string `json:"requestId"`
-		ErrorCode    string `json:"errorCode"`
-		ErrorMessage string `json:"errorMessage"`
-	}
+// cache stores the AuthorizationResponse for the specified accessTokenTTL
+type cache map[string]AuthorizationResponse
 
-	// lipaNaMpesaOnlineRequestParameters has the parameters used initiate online payment on behalf of a customer.
-	lipaNaMpesaOnlineRequestParameters struct {
-		// This is organizations shortcode (Paybill or Buygoods - A 5 to 7 digit account number) used to identify
-		// an organization and receive the transaction.
-		// Example Shortcode (5 to 7 digits) e.g. 654321
-		BusinessShortCode uint `json:"BusinessShortCode"`
-		// 	This is the password used for encrypting the request sent: A base64 encoded string.
-		//	The base64 string is a combination of Shortcode+Passkey+Timestamp
-		Password string `json:"Password"`
-		// This is the Timestamp of the transaction in the format of YEAR+MONTH+DATE+HOUR+MINUTE+SECOND (YYYYMMDDHHmmss).
-		// Each part should be at least two digits apart from the year which takes four digits.
-		// Example 20060102150405
-		Timestamp string `json:"Timestamp"`
-		// This is the transaction type that is used to identify the transaction when sending the request to M-Pesa.
-		// The transaction type for M-Pesa Express is "CustomerPayBillOnline"
-		// Accepted values are CustomerPayBillOnline or CustomerBuyGoodsOnline
-		TransactionType string `json:"TransactionType"`
-		// This is the Amount transacted normally a numeric value.
-		// Money that customer pays to the Shortcode. Only whole numbers are supported.
-		Amount uint64 `json:"Amount"`
-		// The phone number sending money. The parameter expected is a Valid Safaricom Mobile Number that is M-Pesa
-		// registered in the format 254XXXXXXXXX
-		PartyA uint64 `json:"PartyA"`
-		// The organization receiving the funds. The parameter expected is a 5 to 7 digit as defined on the Shortcode
-		// description above. This can be the same as BusinessShortCode value above.
-		PartyB uint `json:"PartyB"`
-		// The Mobile Number to receive the STK Pin Prompt. This number can be the same as PartyA value above.
-		// Expected format is 254XXXXXXXXX
-		PhoneNumber uint64 `json:"PhoneNumber"`
-		// A CallBack URL is a valid secure URL that is used to receive notifications from M-Pesa API.
-		// It is the endpoint to which the results will be sent by M-Pesa API.
-		// Example https://ip or domain:port/path (https://mydomain.com/path, https://0.0.0.0:9090/path)
-		CallBackURL string `json:"CallBackURL"`
-		// This is an Alpha-Numeric parameter that is defined by your system as an Identifier of the transaction for
-		// CustomerPayBillOnline transaction type. Along with the business name, this value is also displayed to the
-		// customer in the STK Pin Prompt message. Maximum of 12 characters.
-		AccountReference string `json:"AccountReference"`
-		// This is any additional information/comment that can be sent along with the request from your system.
-		// Maximum of 13 Characters.
-		TransactionDesc string `json:"TransactionDesc"`
-	}
-
-	// LipaNaMpesaOnlineRequestResponse is the response sent back by mpesa after initiating an STK push request.
-	LipaNaMpesaOnlineRequestResponse struct {
-		// This is a global unique Identifier for any submitted payment request.
-		// Sample value 16813-1590513-1
-		MerchantRequestID string `json:"MerchantRequestID,omitempty"`
-		// This is a global unique identifier of the processed checkout transaction request.
-		// Sample value ws_CO_DMZ_12321_23423476
-		CheckoutRequestID string `json:"CheckoutRequestID,omitempty"`
-		// Response description is an acknowledgment message from the API that gives the status of the request.
-		// It usually maps to a specific ResponseCode value.
-		// It can be a Success submission message or an error description.
-		// Examples are :
-		// - The service request has failed
-		// - The service request has been accepted successfully.
-		// - Invalid Access Token.
-		ResponseDescription string `json:"ResponseDescription,omitempty"`
-		// This is a Numeric status code that indicates the status of the transaction submission.
-		// 0 means successful submission and any other code means an error occurred.
-		ResponseCode string `json:"ResponseCode,omitempty"`
-		// This is a message that your system can display to the Customer as an acknowledgement of the payment
-		// request submission. Example Success. Request accepted for processing.
-		CustomerMessage string `json:"CustomerMessage,omitempty"`
-		// This is a unique requestID for the payment request
-		RequestID string `json:"requestId,omitempty"`
-		// This is a predefined code that indicates the reason for request failure.
-		// This is defined in the Response Error Details below.
-		// The error codes maps to specific error message as illustrated in the Response Error Details below.
-		ErrorCode string `json:"errorCode,omitempty"`
-		// This is a short descriptive message of the failure reason.
-		ErrorMessage string `json:"errorMessage,omitempty"`
-		// IsSuccessful custom field to determine if the request was processed successfully
-		// without any errors
-		IsSuccessful bool
-	}
-
-	// STKPushRequest represents the data to be provided by the user for LipaNaMpesaOnlineRequestParameters
-	STKPushRequest struct {
-		// Paybill for the organisation
-		Shortcode uint
-		// Organization receiving funds. Can be same as Shortcode but different in case of till numbers.
-		PartyB uint
-		// This is key shared by safaricom after going live.
-		Passkey string
-		// Amount to be transacted. This is will be deducted from the customer.
-		Amount uint64
-		// The PhoneNumber to receive the STK Pin Prompt
-		PhoneNumber uint64
-		// An identifier for the transaction.
-		ReferenceCode string
-		// Endpoint to send the payment notifications.
-		CallbackURL string
-		// Any additional information/comment that can be sent along with the request.
-		TransactionDescription string
-		// This is the type of transaction to be performed. Expects CustomerPayBillOnline or CustomerBuyGoodsOnline
-		TransactionType string
-	}
-
-	// LipaNaMpesaOnlineCallback is the response sent back sent to the callback URL after making an STKPush request
-	LipaNaMpesaOnlineCallback struct {
-		// This is the root key for the entire Callback message.
-		Body struct {
-			// This is the first child of the Body.
-			StkCallback struct {
-				// This is a global unique Identifier for any submitted payment request.
-				// This is the same value returned in the acknowledgement message of the initial request.
-				MerchantRequestID string `json:"MerchantRequestID"`
-				// This is a global unique identifier of the processed checkout transaction request.
-				// This is the same value returned in the acknowledgement message of the initial request.
-				CheckoutRequestID string `json:"CheckoutRequestID"`
-				// This is a numeric status code that indicates the status of the transaction processing.
-				// 0 means successful processing and any other code means an error occurred or the transaction failed.
-				ResultCode int `json:"ResultCode"`
-				// Result description is a message from the API that gives the status of the request processing,
-				// usually maps to a specific ResultCode value.
-				// It can be a Success processing message or an error description message.
-				ResultDesc string `json:"ResultDesc"`
-				// This is the JSON object that holds more details for the transaction.
-				// It is only returned for Successful transaction.
-				CallbackMetadata struct {
-					// This is a JSON Array, within the CallbackMetadata, that holds additional transaction details in
-					// JSON objects. Since this array is returned under the CallbackMetadata,
-					// it is only returned for Successful transaction.
-					Item []struct {
-						Name  string      `json:"Name"`
-						Value interface{} `json:"Value,omitempty"`
-					} `json:"Item"`
-				} `json:"CallbackMetadata"`
-			} `json:"stkCallback"`
-		} `json:"Body"`
-	}
-
-	// b2cPaymentRequestRequestParameters are the parameters for the B2C API used to transact between an M-Pesa short
-	// code to a phone number registered on M-Pesa.
-	b2cPaymentRequestRequestParameters struct {
-		// The username of the M-Pesa B2C account API operator.
-		InitiatorName string `json:"InitiatorName"`
-		// This is the value obtained after encrypting the API initiator password.
-		SecurityCredential string `json:"SecurityCredential"`
-		// This is a unique command that specifies B2C transaction type.
-		// Possible values are:
-		// 1. SalaryPayment: This supports sending money to both registered and unregistered M-Pesa customers.
-		//2. BusinessPayment: This is a normal business to customer payment,  supports only M-Pesa registered customers.
-		//3. PromotionPayment: This is a promotional payment to customers.
-		// The M-Pesa notification message is a congratulatory message. Supports only M-Pesa registered customers.
-		CommandID string `json:"CommandID"`
-		// The amount of money being sent to the customer.
-		Amount uint64
-		// This is the B2C organization shortcode from which the money is to be sent.
-		PartyA uint
-		// This is the customer mobile number  to receive the amount.
-		// The number should have the country code (254) without the plus sign.
-		PartyB uint64
-		// Any additional information to be associated with the transaction. Sentence of upto 100 characters
-		Remarks string
-		// This is the URL to be specified in your request that will be used by API Proxy to send notification in case
-		// the payment request is timed out while awaiting processing in the queue.
-		QueueTimeOutURL string
-		// This is the URL to be specified in your request that will be used by M-Pesa to send notification upon
-		// processing of the payment request.
-		ResultURL string
-		// Any additional information to be associated with the transaction. Sentence of upto 100 characters
-		Occassion string
-	}
-
-	// B2CPaymentRequest is the data to be used to make B2C Payment Request
-	B2CPaymentRequest struct {
-		// The username of the M-Pesa B2C account API operator.
-		InitiatorName string
-		// The password of the M-Pesa B2C account API operator.
-		InitiatorPassword string
-		// This is a unique command that specifies B2C transaction type.
-		CommandID string
-		// The amount of money being sent to the customer.
-		Amount uint64
-		// This is the B2C organization shortcode from which the money is to be sent.
-		Shortcode uint
-		// This is the customer mobile number  to receive the amount.
-		// The number should have the country code (254) without the plus sign.
-		PhoneNumber uint64
-		// Any additional information to be associated with the transaction. Sentence of upto 100 characters
-		Remarks string
-		// This is the URL to be specified in your request that will be used by API Proxy to send notification in case
-		// the payment request is timed out while awaiting processing in the queue.
-		QueueTimeOutURL string
-		// This is the URL to be specified in your request that will be used by M-Pesa to send notification upon
-		// processing of the payment request.
-		ResultURL string
-		// Any additional information to be associated with the transaction. Sentence of upto 100 characters
-		Occasion string
-	}
-
-	// B2CPaymentRequestResponse is the response sent back by mpesa after making a B2CPaymentRequest
-	B2CPaymentRequestResponse struct {
-		// This is a global unique identifier for the transaction request returned by the API
-		// proxy upon successful request submission. Sample value AG_2376487236_126732989KJHJKH
-		OriginatorConversationId string `json:"OriginatorConversationId,omitempty"`
-		// This is a global unique identifier for the transaction request returned by the M-Pesa upon successful
-		// request submission. Sample value 236543-276372-2
-		ConversationId string `json:"ConversationId,omitempty"`
-		// This is the description of the request submission status.
-		// Sample - Accept the service request successfully
-		ResponseDescription string `json:"ResponseDescription,omitempty"`
-		// This is a unique requestID for the payment request
-		RequestID string `json:"requestId,omitempty"`
-		// This is a predefined code that indicates the reason for request failure.
-		// This is defined in the Response Error Details below.
-		// The error codes maps to specific error message as illustrated in the Response Error Details below.
-		ErrorCode string `json:"errorCode,omitempty"`
-		// This is a short descriptive message of the failure reason.
-		ErrorMessage string `json:"errorMessage,omitempty"`
-		// IsSuccessful custom field to determine if the request was processed successfully
-		// without any errors
-		IsSuccessful bool
-	}
-
-	// B2CPaymentRequestCallback this is a payload sent to the callback URL after making a B2CPaymentRequest
-	B2CPaymentRequestCallback struct {
-		// This is the root parameter that encloses the entire result message.
-		Result struct {
-			// This is a status code that indicates whether the transaction was already sent to your listener.
-			// Usual value is 0.
-			ResultType int `json:"ResultType"`
-			// This is a numeric status code that indicates the status of the transaction processing.
-			// 0 means success and any other code means an error occurred or the transaction failed.
-			ResultCode int `json:"ResultCode"`
-			// This is a message from the API that gives the status of the request processing and usually maps
-			// to a specific result code value.
-			// Samples are - Service request is has bee accepted successfully
-			//				- Initiator information is invalid
-			ResultDesc string `json:"ResultDesc"`
-			// This is a global unique identifier for the transaction request returned by the API proxy upon
-			// successful request submission.
-			OriginatorConversationID string `json:"OriginatorConversationID"`
-			// This is a global unique identifier for the transaction request returned by the M-Pesa upon
-			// successful request submission.
-			ConversationID string `json:"ConversationID"`
-			// This is a unique M-PESA transaction ID for every payment request.
-			// Same value is sent to customer over SMS upon successful processing.
-			TransactionID string `json:"TransactionID"`
-			// This is a JSON object that holds more details for the transaction.
-			ResultParameters struct {
-				// This is a JSON array within the ResultParameters that holds additional transaction details as
-				// JSON objects.
-				ResultParameter []struct {
-					Key   string      `json:"Key"`
-					Value interface{} `json:"Value"`
-				} `json:"ResultParameter"`
-			} `json:"ResultParameters"`
-			ReferenceData struct {
-				ReferenceItem struct {
-					Key   string `json:"Key"`
-					Value string `json:"Value"`
-				} `json:"ReferenceItem"`
-			} `json:"ReferenceData"`
-		} `json:"Result"`
-	}
+const (
+	Sandbox    Environment = "sandbox"
+	Production Environment = "production"
 )
+
+var accessTokenTTL = 55 * time.Minute
+
+// IsProduction returns true if the current env is set to production.
+func (e Environment) IsProduction() bool {
+	return e == Production
+}
+
+type HttpClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+// Mpesa is an app to make a transaction
+type Mpesa struct {
+	client      HttpClient
+	environment Environment
+	mu          sync.Mutex
+	cache       cache
+
+	consumerKey    string
+	consumerSecret string
+
+	authURL    string
+	stkPushURL string
+	b2cURL     string
+}
 
 var (
 	ErrInvalidBusinessShortCode      = errors.New("mpesa: business shortcode must be 5 or more digits")
@@ -316,26 +72,30 @@ var (
 )
 
 const (
-	SandboxBaseURL    = "https://sandbox.safaricom.co.ke"
-	ProductionBaseURL = "https://api.safaricom.co.ke"
+	sandboxBaseURL    = "https://sandbox.safaricom.co.ke"
+	productionBaseURL = "https://api.safaricom.co.ke"
 )
 
-// Init initializes a new Mpesa app that will be used to perform C2B or B2C transaction
-func Init(c *config.Credentials, isOnProduction bool) *Mpesa {
-	baseUrl := SandboxBaseURL
-
-	if isOnProduction {
-		baseUrl = ProductionBaseURL
+// NewApp initializes a new Mpesa app that will be used to perform C2B or B2C transaction
+func NewApp(c HttpClient, consumerKey, consumerSecret string, env Environment) *Mpesa {
+	if c == nil {
+		c = &http.Client{
+			Timeout: 10 * time.Second,
+		}
 	}
 
-	newCache := cache.New(55*time.Minute, 10*time.Minute)
+	baseUrl := sandboxBaseURL
+	if env == Production {
+		baseUrl = productionBaseURL
+	}
 
 	return &Mpesa{
-		ConsumerKey:    c.ConsumerKey,
-		ConsumerSecret: c.ConsumerSecret,
-		BaseURL:        baseUrl,
-		IsOnProduction: isOnProduction,
-		Cache:          newCache,
+		client:         c,
+		environment:    env,
+		cache:          make(cache),
+		consumerKey:    consumerKey,
+		consumerSecret: consumerSecret,
+		authURL:        baseUrl + `/oauth/v1/generate?grant_type=client_credentials`,
 	}
 }
 
@@ -365,67 +125,52 @@ func makeRequest(req *http.Request) ([]byte, error) {
 	return body, nil
 }
 
-// cachedAccessToken returns the cached access token
-func (m *Mpesa) cachedAccessToken() (interface{}, bool) {
-	return m.Cache.Get(m.ConsumerKey)
-}
-
-// getAccessToken returns a token to be used to authenticate an app.
+// GenerateAccessToken returns a time bound access token to call allowed APIs.
 // This token should be used in all other subsequent requests to the APIs
-// getAccessToken will also cache the access token for 55 minutes.
-func (m *Mpesa) getAccessToken() (string, error) {
-	cachedToken, exists := m.cachedAccessToken()
+// GenerateAccessToken will also cache the access token for the specified refresh after period
+func (m *Mpesa) GenerateAccessToken() (string, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	if exists {
-		return cachedToken.(string), nil
+	if cachedData, ok := m.cache[m.consumerKey]; ok {
+		if cachedData.setAt.Add(accessTokenTTL).After(time.Now()) {
+			return cachedData.AccessToken, nil
+		}
 	}
 
-	endpoint := fmt.Sprintf("%s/oauth/v1/generate?grant_type=client_credentials", m.BaseURL)
-
-	// Create a new http request
-	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
-
+	req, err := http.NewRequest(http.MethodGet, m.authURL, nil)
 	if err != nil {
-		return "", fmt.Errorf("mpesa.GetAccessToken.NewRequest:: %v", err)
+		return "", fmt.Errorf("mpesa: error creating authorization http request - %v", err)
 	}
 
-	// Set the basic auth header
-	req.SetBasicAuth(m.ConsumerKey, m.ConsumerSecret)
+	req.SetBasicAuth(m.consumerKey, m.consumerSecret)
 
-	resp, err := makeRequest(req)
-
+	res, err := m.client.Do(req)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("mpesa: error making authorization http request - %v", err)
 	}
 
-	var response mpesaAccessTokenResponse
+	//goland:noinspection GoUnhandledErrorResult
+	defer res.Body.Close()
 
-	if err := json.Unmarshal(resp, &response); err != nil {
-		return "", fmt.Errorf("mpesa.GetAccessToken.UnmarshalResponse:: %v", err)
+	if res.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("mpesa: authorization request failed with status - %v", res.Status)
 	}
 
-	// Check if the authentication passed. If it did, we won't have any error code
-	if response.ErrorCode != "" {
-		return "", fmt.Errorf("mpesa.GetAccessToken.MpesaResponse:: %v", response.ErrorMessage)
+	var response AuthorizationResponse
+	if err := json.NewDecoder(res.Body).Decode(&response); err != nil {
+		return "", fmt.Errorf("mpesa: error decoding authorization response - %v", err.Error())
 	}
 
-	token := response.AccessToken
-
-	m.Cache.Set(m.ConsumerKey, token, 55*time.Minute)
-
-	return token, nil
+	response.setAt = time.Now()
+	m.cache[m.consumerKey] = response
+	return m.cache[m.consumerKey].AccessToken, nil
 }
 
 // Environment returns the current environment the app is running on.
 // It will return either production or sandbox
-func (m *Mpesa) Environment() string {
-	environment := "production"
-
-	if !m.IsOnProduction {
-		environment = "sandbox"
-	}
-
-	return environment
+func (m *Mpesa) Environment() Environment {
+	return m.environment
 }
 
 // isValidURL attempt to check if the value passed is a valid url or string
@@ -575,15 +320,13 @@ func (m *Mpesa) LipaNaMpesaOnline(s *STKPushRequest) (*LipaNaMpesaOnlineRequestR
 		return nil, fmt.Errorf("mpesa.LipaNaMpesaOnline.CreateRequestBody:: %v", err)
 	}
 
-	endpoint := fmt.Sprintf("%s/mpesa/stkpush/v1/processrequest", m.BaseURL)
-
-	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewBuffer(requestBody))
+	req, err := http.NewRequest(http.MethodPost, m.stkPushURL, bytes.NewBuffer(requestBody))
 
 	if err != nil {
 		return nil, fmt.Errorf("mpesa.LipaNaMpesaOnline.CreateNewRequest:: %v", err)
 	}
 
-	accessToken, err := m.getAccessToken()
+	accessToken, err := m.GenerateAccessToken()
 
 	if err != nil {
 		return nil, err
@@ -699,23 +442,21 @@ func (b *B2CPaymentRequest) b2cPaymentRequestBody(isOnProduction bool) ([]byte, 
 
 // B2CPayment initiates a B2C request to be used to send money the customer
 func (m *Mpesa) B2CPayment(b *B2CPaymentRequest) (*B2CPaymentRequestResponse, error) {
-	requestBody, err := b.b2cPaymentRequestBody(m.IsOnProduction)
+	requestBody, err := b.b2cPaymentRequestBody(m.environment.IsProduction())
 
 	if err != nil {
 		return nil, err
 	}
 
-	endpoint := fmt.Sprintf("%s/mpesa/b2c/v1/paymentrequest", m.BaseURL)
-
 	// Create a new request
-	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewBuffer(requestBody))
+	req, err := http.NewRequest(http.MethodPost, m.b2cURL, bytes.NewBuffer(requestBody))
 
 	if err != nil {
 		return nil, fmt.Errorf("mpesa.B2CPayment.CreateNewRequest:: %v", err)
 	}
 
 	// Generate an access token
-	accessToken, err := m.getAccessToken()
+	accessToken, err := m.GenerateAccessToken()
 
 	if err != nil {
 		return nil, err
