@@ -1,6 +1,7 @@
 package mpesa
 
 import (
+	"context"
 	"github.com/stretchr/testify/require"
 	"net/http"
 	"testing"
@@ -90,6 +91,18 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 				require.NotEqual(t, oldToken, app.cache[testConsumerKey].AccessToken)
 			},
 		},
+		{
+			name: "it fails with 404 if invalid url is passed",
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient) {
+				c.MockRequest(app.stkPushURL, func() (status int, body string) {
+					return http.StatusNotFound, ``
+				})
+
+				token, err := app.GenerateAccessToken()
+				require.NotNil(t, err)
+				require.Empty(t, token)
+			},
+		},
 	}
 
 	for _, tc := range tests {
@@ -101,6 +114,101 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 			app := NewApp(cl, testConsumerKey, testConsumerSecret, Sandbox)
 
 			tc.mock(t, app, cl)
+		})
+	}
+}
+
+func TestMpesa_LipaNaMpesaOnline(t *testing.T) {
+	tests := []struct {
+		name   string
+		stkReq STKPushRequest
+		mock   func(t *testing.T, app *Mpesa, c *mockHttpClient, stkReq STKPushRequest)
+	}{
+		{
+			name: "it makes stk push request successfully",
+			stkReq: STKPushRequest{
+				BusinessShortCode: "174379",
+				TransactionType:   "CustomerPayBillOnline",
+				Amount:            10,
+				PartyA:            254708374149,
+				PartyB:            "174379",
+				PhoneNumber:       254708374149,
+				CallBackURL:       "https://example.com",
+				AccountReference:  "Test",
+				TransactionDesc:   "Test",
+			},
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, stkReq STKPushRequest) {
+				passkey := "passkey"
+
+				c.MockRequest(app.stkPushURL, func() (status int, body string) {
+					return http.StatusOK, `
+						{
+						  "MerchantRequestID": "29115-34620561-1",
+						  "CheckoutRequestID": "ws_CO_191220191020363925",
+						  "ResponseCode": "0",
+						  "ResponseDescription": "Success. Request accepted for processing",
+						  "CustomerMessage": "Success. Request accepted for processing"
+						}`
+				})
+
+				res, err := app.LipaNaMpesaOnline(context.Background(), passkey, &stkReq)
+
+				require.NoError(t, err)
+				require.NotNil(t, res)
+			},
+		},
+		{
+			name: "request fails with an error code",
+			stkReq: STKPushRequest{
+				TransactionType:  "CustomerPayBillOnline",
+				Amount:           10,
+				PartyA:           254708374149,
+				PartyB:           "174379",
+				PhoneNumber:      254708374149,
+				CallBackURL:      "https://example.com",
+				AccountReference: "Test",
+				TransactionDesc:  "Test",
+			},
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, stkReq STKPushRequest) {
+				passkey := "passkey"
+
+				c.MockRequest(app.stkPushURL, func() (status int, body string) {
+					return http.StatusBadRequest, `
+						{
+							"requestId": "4788-81090592-4",
+							"errorCode": "400.002.02",
+							"errorMessage": "Bad Request - Invalid BusinessShortCode"
+						}`
+				})
+
+				res, err := app.LipaNaMpesaOnline(context.Background(), passkey, &stkReq)
+				require.Error(t, err)
+				require.Nil(t, res)
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cl := newMockHttpClient()
+			app := NewApp(cl, testConsumerKey, testConsumerSecret, Sandbox)
+
+			cl.MockRequest(app.authURL, func() (status int, body string) {
+				return http.StatusOK, `
+						{
+						"access_token": "0A0v8OgxqqoocblflR58m9chMdnU",
+						"expires_in": "3599"
+						}`
+			})
+
+			tc.mock(t, app, cl, tc.stkReq)
+
+			_, err := app.GenerateAccessToken()
+			require.NoError(t, err)
+			require.Len(t, cl.requests, 2)
 		})
 	}
 }
