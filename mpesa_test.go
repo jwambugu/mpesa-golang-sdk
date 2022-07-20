@@ -31,14 +31,15 @@ func TestInit(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			newMpesa := Init(conf.MpesaC2B.Credentials, tc.isOnProduction)
+			creds := conf.MpesaC2B.Credentials
+			app := NewApp(http.DefaultClient, creds.ConsumerKey, creds.ConsumerSecret, Sandbox)
 
-			assert.NotNil(t, newMpesa)
-			assert.Equal(t, tc.want, newMpesa.BaseURL)
-			assert.Equal(t, tc.isOnProduction, newMpesa.IsOnProduction)
-			assert.NotNil(t, newMpesa.ConsumerKey)
-			assert.NotNil(t, newMpesa.ConsumerSecret)
-			assert.NotNil(t, newMpesa.Cache)
+			assert.NotNil(t, app)
+			assert.Equal(t, tc.want, app.baseURL)
+			assert.Equal(t, tc.isOnProduction, app.environment)
+			assert.NotNil(t, app.consumerKey)
+			assert.NotNil(t, app.consumerSecret)
+			assert.NotNil(t, app.cache)
 		})
 	}
 }
@@ -65,11 +66,12 @@ func TestMpesa_Environment(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			newMpesa := Init(conf.MpesaC2B.Credentials, tc.isOnProduction)
-			assert.NotNil(t, newMpesa)
-			assert.Equal(t, tc.isOnProduction, newMpesa.IsOnProduction)
+			creds := conf.MpesaC2B.Credentials
+			app := NewApp(http.DefaultClient, creds.ConsumerKey, creds.ConsumerSecret, Sandbox)
+			assert.NotNil(t, app)
+			assert.Equal(t, tc.isOnProduction, app.environment)
 
-			environment := newMpesa.Environment()
+			environment := app.environment.IsProduction()
 
 			assert.NotEmpty(t, environment)
 			assert.Equal(t, tc.expectedEnvironment, environment)
@@ -153,11 +155,12 @@ func TestMpesa_getAccessToken(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			m := Init(tc.credentials, false)
+			creds := conf.MpesaC2B.Credentials
+			app := NewApp(http.DefaultClient, creds.ConsumerKey, creds.ConsumerSecret, Sandbox)
 
-			token, err := m.getAccessToken()
+			token, err := app.getAccessToken()
 
-			cachedToken, exists := m.cachedAccessToken()
+			cachedToken, exists := app.cachedAccessToken()
 
 			if !tc.isValid {
 				assert.Error(t, err)

@@ -10,7 +10,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/jwambugu/mpesa-golang-sdk/pkg/config"
 	"github.com/patrickmn/go-cache"
 	"io"
 	"io/ioutil"
@@ -23,14 +22,28 @@ import (
 	"time"
 )
 
+type Environment string
+
+const (
+	Sandbox    Environment = "sandbox"
+	Production Environment = "production"
+)
+
+// IsProduction returns true if the current env is set to production.
+func (e Environment) IsProduction() bool {
+	return e == Production
+}
+
 type (
 	// Mpesa is an app to make a transaction
 	Mpesa struct {
-		ConsumerKey    string
-		ConsumerSecret string
-		BaseURL        string
-		IsOnProduction bool
-		Cache          *cache.Cache
+		consumerKey    string
+		consumerSecret string
+		baseURL        string
+		environment    Environment
+		cache          *cache.Cache
+
+		client http.Client
 	}
 
 	// mpesaAccessTokenResponse is the response sent back by Safaricom when we make a request to generate a token
@@ -320,22 +333,27 @@ const (
 	ProductionBaseURL = "https://api.safaricom.co.ke"
 )
 
-// Init initializes a new Mpesa app that will be used to perform C2B or B2C transaction
-func Init(c *config.Credentials, isOnProduction bool) *Mpesa {
-	baseUrl := SandboxBaseURL
+// NewApp initializes a new Mpesa app that will be used to perform C2B or B2C transaction
+func NewApp(c *http.Client, consumerKey, consumerSecret string, env Environment) *Mpesa {
+	if c == nil {
+		c = &http.Client{
+			Timeout: 10 * time.Second,
+		}
+	}
 
-	if isOnProduction {
+	baseUrl := SandboxBaseURL
+	if env == Production {
 		baseUrl = ProductionBaseURL
 	}
 
 	newCache := cache.New(55*time.Minute, 10*time.Minute)
 
 	return &Mpesa{
-		ConsumerKey:    c.ConsumerKey,
-		ConsumerSecret: c.ConsumerSecret,
-		BaseURL:        baseUrl,
-		IsOnProduction: isOnProduction,
-		Cache:          newCache,
+		consumerKey:    consumerKey,
+		consumerSecret: consumerSecret,
+		baseURL:        baseUrl,
+		environment:    env,
+		cache:          newCache,
 	}
 }
 
@@ -367,7 +385,7 @@ func makeRequest(req *http.Request) ([]byte, error) {
 
 // cachedAccessToken returns the cached access token
 func (m *Mpesa) cachedAccessToken() (interface{}, bool) {
-	return m.Cache.Get(m.ConsumerKey)
+	return m.cache.Get(m.consumerKey)
 }
 
 // getAccessToken returns a token to be used to authenticate an app.
@@ -380,7 +398,7 @@ func (m *Mpesa) getAccessToken() (string, error) {
 		return cachedToken.(string), nil
 	}
 
-	endpoint := fmt.Sprintf("%s/oauth/v1/generate?grant_type=client_credentials", m.BaseURL)
+	endpoint := fmt.Sprintf("%s/oauth/v1/generate?grant_type=client_credentials", m.baseURL)
 
 	// Create a new http request
 	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
@@ -390,7 +408,7 @@ func (m *Mpesa) getAccessToken() (string, error) {
 	}
 
 	// Set the basic auth header
-	req.SetBasicAuth(m.ConsumerKey, m.ConsumerSecret)
+	req.SetBasicAuth(m.consumerKey, m.consumerSecret)
 
 	resp, err := makeRequest(req)
 
@@ -411,21 +429,15 @@ func (m *Mpesa) getAccessToken() (string, error) {
 
 	token := response.AccessToken
 
-	m.Cache.Set(m.ConsumerKey, token, 55*time.Minute)
+	m.cache.Set(m.consumerKey, token, 55*time.Minute)
 
 	return token, nil
 }
 
 // Environment returns the current environment the app is running on.
 // It will return either production or sandbox
-func (m *Mpesa) Environment() string {
-	environment := "production"
-
-	if !m.IsOnProduction {
-		environment = "sandbox"
-	}
-
-	return environment
+func (m *Mpesa) Environment() Environment {
+	return m.environment
 }
 
 // isValidURL attempt to check if the value passed is a valid url or string
@@ -575,7 +587,7 @@ func (m *Mpesa) LipaNaMpesaOnline(s *STKPushRequest) (*LipaNaMpesaOnlineRequestR
 		return nil, fmt.Errorf("mpesa.LipaNaMpesaOnline.CreateRequestBody:: %v", err)
 	}
 
-	endpoint := fmt.Sprintf("%s/mpesa/stkpush/v1/processrequest", m.BaseURL)
+	endpoint := fmt.Sprintf("%s/mpesa/stkpush/v1/processrequest", m.baseURL)
 
 	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewBuffer(requestBody))
 
@@ -699,13 +711,13 @@ func (b *B2CPaymentRequest) b2cPaymentRequestBody(isOnProduction bool) ([]byte, 
 
 // B2CPayment initiates a B2C request to be used to send money the customer
 func (m *Mpesa) B2CPayment(b *B2CPaymentRequest) (*B2CPaymentRequestResponse, error) {
-	requestBody, err := b.b2cPaymentRequestBody(m.IsOnProduction)
+	requestBody, err := b.b2cPaymentRequestBody(m.environment.IsProduction())
 
 	if err != nil {
 		return nil, err
 	}
 
-	endpoint := fmt.Sprintf("%s/mpesa/b2c/v1/paymentrequest", m.BaseURL)
+	endpoint := fmt.Sprintf("%s/mpesa/b2c/v1/paymentrequest", m.baseURL)
 
 	// Create a new request
 	req, err := http.NewRequest(http.MethodPost, endpoint, bytes.NewBuffer(requestBody))
