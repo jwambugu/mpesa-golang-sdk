@@ -14,7 +14,8 @@ type (
 	}
 
 	mockHttpClient struct {
-		requests map[string]mockResponse
+		responses map[string]mockResponse
+		requests  []*http.Request
 	}
 )
 
@@ -33,19 +34,21 @@ func mockHttpResponse(status int, body string) *http.Response {
 // newMockHttpClient creates a new instance of mockHttpClient
 func newMockHttpClient() *mockHttpClient {
 	return &mockHttpClient{
-		requests: make(map[string]mockResponse),
+		responses: make(map[string]mockResponse),
 	}
 }
 
 // MockRequest appends the given response for the provided url.
 func (m *mockHttpClient) MockRequest(url string, fn mockResponseFunc) {
-	m.requests[url] = mockResponse{fn: fn}
+	m.responses[url] = mockResponse{fn: fn}
 }
 
-// Do checks if the given req.URL exists in the available requests lists and returns the stored response.
+// Do checks if the given req.URL exists in the available responses lists and returns the stored response.
 // If none exists, it returns status http.StatusNotFound
 func (m *mockHttpClient) Do(req *http.Request) (*http.Response, error) {
-	if mock, ok := m.requests[req.URL.String()]; ok {
+	m.requests = append(m.requests, req.Clone(req.Context()))
+
+	if mock, ok := m.responses[req.URL.String()]; ok {
 		if mock.fn != nil {
 			status, body := mock.fn()
 			return mockHttpResponse(status, body), nil
