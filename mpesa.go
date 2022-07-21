@@ -185,9 +185,9 @@ func (m *Mpesa) STKPush(ctx context.Context, passkey string, stkReq *STKPushRequ
 func UnmarshalSTKPushCallback(in interface{}) (out *STKPushCallback, err error) {
 	var b []byte
 
-	switch in.(type) {
+	switch in := in.(type) {
 	case string:
-		b = []byte(in.(string))
+		b = []byte(in)
 	default:
 		if b, err = json.Marshal(in); err != nil {
 			return nil, err

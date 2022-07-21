@@ -35,7 +35,7 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 				require.Equal(t, token, app.cache[testConsumerKey].AccessToken)
 
 				// Make subsequent call to get the token from the cache
-				token, err = app.GenerateAccessToken(nil)
+				token, err = app.GenerateAccessToken(ctx)
 				require.NoError(t, err)
 				require.Equal(t, token, app.cache[testConsumerKey].AccessToken)
 			},
@@ -208,7 +208,7 @@ func TestMpesa_LipaNaMpesaOnline(t *testing.T) {
 			ctx := context.Background()
 			tc.mock(t, ctx, app, cl, tc.stkReq)
 
-			_, err := app.GenerateAccessToken(nil)
+			_, err := app.GenerateAccessToken(ctx)
 			require.NoError(t, err)
 			require.Len(t, cl.requests, 2)
 		})
