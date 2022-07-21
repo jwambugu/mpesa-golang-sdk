@@ -32,7 +32,7 @@ type (
 		TransactionType string `json:"TransactionType"`
 
 		// Amount to be transacted which will be deducted from the customer.
-		Amount uint64 `json:"Amount,omitempty"`
+		Amount uint `json:"Amount,omitempty"`
 
 		// PartyA is phone number sending money. The parameter expected is a valid Safaricom Mobile Number that is
 		// M-Pesa registered in the format 2547XXXXXXXX
@@ -79,8 +79,6 @@ type (
 		// CustomerMessage is a message that your system can display to the Customer as an acknowledgement of the
 		// payment request submission. Example: Success. Request accepted for processing.
 		CustomerMessage string `json:"CustomerMessage,omitempty"`
-
-		// Error Responses:
 
 		// RequestID is a unique request ID for the payment request
 		RequestID string `json:"requestId,omitempty"`
@@ -157,5 +155,72 @@ type (
 	STKPushCallback struct {
 		// Body is the root key for the entire callback message.
 		Body STKPushCallbackBody `json:"Body"`
+	}
+
+	B2CRequest struct {
+		// InitiatorName is the username of the M-Pesa B2C account API operator. The access channel for this operator
+		// must be API and the account must be in active status.
+		InitiatorName string `json:"InitiatorName"`
+
+		// SecurityCredential is the value obtained after encrypting the API initiator password.
+		SecurityCredential string `json:"SecurityCredential"`
+
+		// CommandID is a unique command that specifies B2C transaction type.
+		// Examples:
+		//	SalaryPayment: This supports sending money to both registered and unregistered M-Pesa customers.
+		//  BusinessPayment: This is a normal business to customer payment,supports only M-Pesa registered customers.
+		//	PromotionPayment: This is a promotional payment to customers. The M-Pesa notification message is a
+		//	congratulatory message and supports only M-Pesa registered customers.
+		CommandID string `json:"CommandID"`
+
+		// Amount to be sent to the customer.
+		Amount uint `json:"Amount"`
+
+		// PartyA is the B2C organization shortcode from which the money is to be from.
+		PartyA string `json:"PartyA"`
+
+		// PartyB is the customer mobile number to receive the amount which should have the country code (254).
+		PartyB string `json:"PartyB"`
+
+		// Remarks represents any additional information to be associated with the transaction.
+		Remarks string `json:"Remarks"`
+
+		// QueueTimeOutURL is the URL to be specified in your request that will be used by API Proxy to send
+		// notification in-case the payment request is timed out while awaiting processing in the queue.
+		QueueTimeOutURL string `json:"QueueTimeOutURL"`
+
+		// ResultURL is the URL to be specified in your request that will be used by M-Pesa to send notification upon
+		// processing of the payment request.
+		ResultURL string `json:"ResultURL"`
+
+		// Occasion is any additional information to be associated with the transaction.
+		Occasion string `json:"Occasion"`
+	}
+
+	B2CRequestResponse struct {
+		// ConversationID is a global unique identifier for the transaction request returned by the M-Pesa upon successful
+		// request submission.
+		ConversationID string `json:"ConversationID"`
+
+		// OriginatorConversationID is a global unique identifier for the transaction request returned by the API proxy
+		// upon successful request submission.
+		OriginatorConversationID string `json:"OriginatorConversationID"`
+
+		// ResponseCode is a numeric status code that indicates the status of the transaction submission.
+		// 0 means successful submission and any other code means an error occurred.
+		ResponseCode string `json:"ResponseCode"`
+
+		// ResponseDescription is the status of the request.
+		ResponseDescription string `json:"ResponseDescription"`
+
+		// RequestID is a unique request ID for the payment request
+		RequestID string `json:"requestId"`
+
+		// ErrorCode is a predefined code that indicates the reason for request failure that is defined in the
+		// ErrorMessage. The error codes maps to specific error message.
+		ErrorCode string `json:"errorCode"`
+
+		// ErrorMessage is a short descriptive message of the failure reason.
+		ErrorMessage string `json:"errorMessage"`
 	}
 )
