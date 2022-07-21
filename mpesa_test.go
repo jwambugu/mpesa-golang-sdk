@@ -2,6 +2,9 @@ package mpesa
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
+	"fmt"
 	"github.com/stretchr/testify/require"
 	"net/http"
 	"testing"
@@ -142,6 +145,24 @@ func TestMpesa_LipaNaMpesaOnline(t *testing.T) {
 				passkey := "passkey"
 
 				c.MockRequest(app.stkPushURL, func() (status int, body string) {
+					req := c.requests[1]
+
+					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
+					wantAuthorizationHeader := `Bearer ` + app.cache[testConsumerKey].AccessToken
+					require.Equal(t, wantAuthorizationHeader, req.Header.Get("Authorization"))
+
+					var reqParams STKPushRequest
+					err := json.NewDecoder(req.Body).Decode(&reqParams)
+					require.NoError(t, err)
+
+					timestamp := time.Now().Format("20060102150405")
+					wantPassword := fmt.Sprintf("%s%s%s", stkReq.BusinessShortCode, passkey, timestamp)
+
+					gotPassword := make([]byte, base64.StdEncoding.DecodedLen(len(reqParams.Password)))
+					n, err := base64.StdEncoding.Decode(gotPassword, []byte(reqParams.Password))
+					require.NoError(t, err)
+					require.Equal(t, wantPassword, string(gotPassword[:n]))
+
 					return http.StatusOK, `
 						{
 						  "MerchantRequestID": "29115-34620561-1",
@@ -152,7 +173,7 @@ func TestMpesa_LipaNaMpesaOnline(t *testing.T) {
 						}`
 				})
 
-				res, err := app.STKPush(ctx, passkey, &stkReq)
+				res, err := app.STKPush(ctx, passkey, stkReq)
 
 				require.NoError(t, err)
 				require.NotNil(t, res)
@@ -161,14 +182,15 @@ func TestMpesa_LipaNaMpesaOnline(t *testing.T) {
 		{
 			name: "request fails with an error code",
 			stkReq: STKPushRequest{
-				TransactionType:  "CustomerPayBillOnline",
-				Amount:           10,
-				PartyA:           254708374149,
-				PartyB:           "174379",
-				PhoneNumber:      254708374149,
-				CallBackURL:      "https://example.com",
-				AccountReference: "Test",
-				TransactionDesc:  "Test",
+				BusinessShortCode: "",
+				TransactionType:   "CustomerPayBillOnline",
+				Amount:            10,
+				PartyA:            254708374149,
+				PartyB:            "174379",
+				PhoneNumber:       254708374149,
+				CallBackURL:       "https://example.com",
+				AccountReference:  "Test",
+				TransactionDesc:   "Test",
 			},
 			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, stkReq STKPushRequest) {
 				passkey := "passkey"
@@ -182,7 +204,7 @@ func TestMpesa_LipaNaMpesaOnline(t *testing.T) {
 						}`
 				})
 
-				res, err := app.STKPush(ctx, passkey, &stkReq)
+				res, err := app.STKPush(ctx, passkey, stkReq)
 				require.Error(t, err)
 				require.Nil(t, res)
 			},
@@ -284,6 +306,152 @@ func TestUnmarshalSTKPushCallback(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, callback)
 			require.Equal(t, "ws_CO_191220191020363925", callback.Body.StkCallback.CheckoutRequestID)
+		})
+	}
+}
+
+func TestMpesa_B2C(t *testing.T) {
+	tests := []struct {
+		name   string
+		b2cReq B2CRequest
+		env    Environment
+		mock   func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, b2cReq B2CRequest)
+	}{
+		{
+			name: "it makes a b2c request on sandbox successfully",
+			b2cReq: B2CRequest{
+				InitiatorName:      "TestG2Init",
+				SecurityCredential: "BusinessPayment",
+				CommandID:          "",
+				Amount:             10,
+				PartyA:             "600123",
+				PartyB:             "254728762287",
+				Remarks:            "This is a remark",
+				QueueTimeOutURL:    "https://example.com",
+				ResultURL:          "https://example.com",
+				Occasion:           "Test Occasion",
+			},
+			env: Sandbox,
+			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, b2cReq B2CRequest) {
+				c.MockRequest(app.b2cURL, func() (status int, body string) {
+					req := c.requests[1]
+
+					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
+					wantAuthorizationHeader := `Bearer ` + app.cache[testConsumerKey].AccessToken
+					require.Equal(t, wantAuthorizationHeader, req.Header.Get("Authorization"))
+
+					var reqParams B2CRequest
+					err := json.NewDecoder(req.Body).Decode(&reqParams)
+					require.NoError(t, err)
+					require.NotEmpty(t, reqParams.SecurityCredential)
+					require.Equal(t, b2cReq.InitiatorName, reqParams.InitiatorName)
+
+					return http.StatusOK, `
+					{    
+					 "ConversationID": "AG_20191219_00005797af5d7d75f652",    
+					 "OriginatorConversationID": "16740-34861180-1",    
+					 "ResponseCode": "0",    
+					 "ResponseDescription": "Accept the service request successfully."
+					}`
+				})
+
+				res, err := app.B2C(ctx, "random-string", b2cReq)
+				require.NoError(t, err)
+				require.NotNil(t, res)
+			},
+		},
+		{
+			name: "it makes a b2c request on production successfully",
+			b2cReq: B2CRequest{
+				InitiatorName:      "TestG2Init",
+				SecurityCredential: "BusinessPayment",
+				CommandID:          "",
+				Amount:             10,
+				PartyA:             "600123",
+				PartyB:             "254728762287",
+				Remarks:            "This is a remark",
+				QueueTimeOutURL:    "https://example.com",
+				ResultURL:          "https://example.com",
+				Occasion:           "Test Occasion",
+			},
+			env: Production,
+			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, b2cReq B2CRequest) {
+				c.MockRequest(app.b2cURL, func() (status int, body string) {
+					req := c.requests[1]
+
+					var reqParams B2CRequest
+					err := json.NewDecoder(req.Body).Decode(&reqParams)
+					require.NoError(t, err)
+					require.NotEmpty(t, reqParams.SecurityCredential)
+
+					return http.StatusOK, `
+					{    
+					 "ConversationID": "AG_20191219_00005797af5d7d75f652",    
+					 "OriginatorConversationID": "16740-34861180-1",    
+					 "ResponseCode": "0",    
+					 "ResponseDescription": "Accept the service request successfully."
+					}`
+				})
+
+				res, err := app.B2C(ctx, "random-string", b2cReq)
+				require.NoError(t, err)
+				require.NotNil(t, res)
+			},
+		},
+		{
+			name: "request fails with an error code",
+			b2cReq: B2CRequest{
+				InitiatorName:      "",
+				SecurityCredential: "BusinessPayment",
+				CommandID:          "",
+				Amount:             10,
+				PartyA:             "600123",
+				PartyB:             "254728762287",
+				Remarks:            "This is a remark",
+				QueueTimeOutURL:    "https://example.com",
+				ResultURL:          "https://example.com",
+				Occasion:           "Test Occasion",
+			},
+			env: Production,
+			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, b2cReq B2CRequest) {
+				c.MockRequest(app.b2cURL, func() (status int, body string) {
+					return http.StatusBadRequest, `
+					{    
+					   "requestId": "11728-2929992-1",
+					   "errorCode": "401.002.01",
+					   "errorMessage": "Error Occurred - Invalid Access Token - BJGFGOXv5aZnw90KkA4TDtu4Xdyf"
+					}`
+				})
+
+				res, err := app.B2C(ctx, "random-string", b2cReq)
+				require.Error(t, err)
+				require.Nil(t, res)
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cl := newMockHttpClient()
+			app := NewApp(cl, testConsumerKey, testConsumerSecret, tc.env)
+
+			cl.MockRequest(app.authURL, func() (status int, body string) {
+				return http.StatusOK, `
+						{
+						"access_token": "0A0v8OgxqqoocblflR58m9chMdnU",
+						"expires_in": "3599"
+						}`
+			})
+
+			ctx := context.Background()
+			tc.mock(t, ctx, app, cl, tc.b2cReq)
+
+			_, err := app.GenerateAccessToken(ctx)
+			require.NoError(t, err)
+			require.Len(t, cl.requests, 2)
 		})
 	}
 }
