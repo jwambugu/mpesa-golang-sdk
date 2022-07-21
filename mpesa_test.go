@@ -16,11 +16,11 @@ const (
 func TestMpesa_GenerateAccessToken(t *testing.T) {
 	tests := []struct {
 		name string
-		mock func(t *testing.T, app *Mpesa, c *mockHttpClient)
+		mock func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient)
 	}{
 		{
 			name: "it generates and caches an access token successfully",
-			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient) {
+			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient) {
 				c.MockRequest(app.authURL, func() (status int, body string) {
 					return http.StatusOK, `
 						{
@@ -29,32 +29,32 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 						}`
 				})
 
-				token, err := app.GenerateAccessToken()
+				token, err := app.GenerateAccessToken(ctx)
 				require.NoError(t, err)
 				require.NotEmpty(t, token)
 				require.Equal(t, token, app.cache[testConsumerKey].AccessToken)
 
 				// Make subsequent call to get the token from the cache
-				token, err = app.GenerateAccessToken()
+				token, err = app.GenerateAccessToken(ctx)
 				require.NoError(t, err)
 				require.Equal(t, token, app.cache[testConsumerKey].AccessToken)
 			},
 		},
 		{
 			name: "it fails to generate an access token",
-			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient) {
+			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient) {
 				c.MockRequest(app.authURL, func() (status int, body string) {
 					return http.StatusBadRequest, ``
 				})
 
-				token, err := app.GenerateAccessToken()
+				token, err := app.GenerateAccessToken(ctx)
 				require.NotNil(t, err)
 				require.Empty(t, token)
 			},
 		},
 		{
 			name: "it flushes and generates a new access token successfully",
-			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient) {
+			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient) {
 				oldToken := "0A0v8OgxqqoocblflR58m9chMdnU"
 
 				c.MockRequest(app.authURL, func() (status int, body string) {
@@ -65,7 +65,7 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 						}`
 				})
 
-				token, err := app.GenerateAccessToken()
+				token, err := app.GenerateAccessToken(ctx)
 				require.NoError(t, err)
 				require.NotEmpty(t, token)
 
@@ -85,7 +85,7 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 				})
 
 				// Make subsequent call to get the token from the cache
-				token, err = app.GenerateAccessToken()
+				token, err = app.GenerateAccessToken(ctx)
 				require.NoError(t, err)
 				require.Equal(t, token, app.cache[testConsumerKey].AccessToken)
 				require.NotEqual(t, oldToken, app.cache[testConsumerKey].AccessToken)
@@ -93,12 +93,12 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 		},
 		{
 			name: "it fails with 404 if invalid url is passed",
-			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient) {
+			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient) {
 				c.MockRequest(app.stkPushURL, func() (status int, body string) {
 					return http.StatusNotFound, ``
 				})
 
-				token, err := app.GenerateAccessToken()
+				token, err := app.GenerateAccessToken(ctx)
 				require.NotNil(t, err)
 				require.Empty(t, token)
 			},
@@ -113,7 +113,8 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 			cl := newMockHttpClient()
 			app := NewApp(cl, testConsumerKey, testConsumerSecret, Sandbox)
 
-			tc.mock(t, app, cl)
+			ctx := context.Background()
+			tc.mock(t, ctx, app, cl)
 		})
 	}
 }
@@ -122,7 +123,7 @@ func TestMpesa_LipaNaMpesaOnline(t *testing.T) {
 	tests := []struct {
 		name   string
 		stkReq STKPushRequest
-		mock   func(t *testing.T, app *Mpesa, c *mockHttpClient, stkReq STKPushRequest)
+		mock   func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, stkReq STKPushRequest)
 	}{
 		{
 			name: "it makes stk push request successfully",
@@ -137,7 +138,7 @@ func TestMpesa_LipaNaMpesaOnline(t *testing.T) {
 				AccountReference:  "Test",
 				TransactionDesc:   "Test",
 			},
-			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, stkReq STKPushRequest) {
+			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, stkReq STKPushRequest) {
 				passkey := "passkey"
 
 				c.MockRequest(app.stkPushURL, func() (status int, body string) {
@@ -151,7 +152,7 @@ func TestMpesa_LipaNaMpesaOnline(t *testing.T) {
 						}`
 				})
 
-				res, err := app.LipaNaMpesaOnline(context.Background(), passkey, &stkReq)
+				res, err := app.STKPush(ctx, passkey, &stkReq)
 
 				require.NoError(t, err)
 				require.NotNil(t, res)
@@ -169,7 +170,7 @@ func TestMpesa_LipaNaMpesaOnline(t *testing.T) {
 				AccountReference: "Test",
 				TransactionDesc:  "Test",
 			},
-			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, stkReq STKPushRequest) {
+			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, stkReq STKPushRequest) {
 				passkey := "passkey"
 
 				c.MockRequest(app.stkPushURL, func() (status int, body string) {
@@ -181,7 +182,7 @@ func TestMpesa_LipaNaMpesaOnline(t *testing.T) {
 						}`
 				})
 
-				res, err := app.LipaNaMpesaOnline(context.Background(), passkey, &stkReq)
+				res, err := app.STKPush(ctx, passkey, &stkReq)
 				require.Error(t, err)
 				require.Nil(t, res)
 			},
@@ -204,11 +205,85 @@ func TestMpesa_LipaNaMpesaOnline(t *testing.T) {
 						}`
 			})
 
-			tc.mock(t, app, cl, tc.stkReq)
+			ctx := context.Background()
+			tc.mock(t, ctx, app, cl, tc.stkReq)
 
-			_, err := app.GenerateAccessToken()
+			_, err := app.GenerateAccessToken(ctx)
 			require.NoError(t, err)
 			require.Len(t, cl.requests, 2)
+		})
+	}
+}
+
+func TestUnmarshalSTKPushCallback(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     interface{}
+		wantError bool
+	}{
+		{
+			name: "it can unmarshal a successful transaction callback string",
+			input: `{
+			   "Body":{
+				  "stkCallback":{
+					 "MerchantRequestID":"29115-34620561-1",
+					 "CheckoutRequestID":"ws_CO_191220191020363925",
+					 "ResultCode":0,
+					 "ResultDesc":"The service request is processed successfully.",
+					 "CallbackMetadata":{
+						"Item":[
+						   {
+							  "Name":"Amount",
+							  "Value":1.00
+						   },
+						   {
+							  "Name":"MpesaReceiptNumber",
+							  "Value":"NLJ7RT61SV"
+						   },
+						   {
+							  "Name":"TransactionDate",
+							  "Value":20191219102115
+						   },
+						   {
+							  "Name":"PhoneNumber",
+							  "Value":254708374149
+						   }
+						]
+					 }
+				  }
+			   }
+			}`,
+		},
+		{
+			name: "it can unmarshal a unsuccessful transaction callback struct",
+			input: STKPushCallback{
+				Body: STKPushCallbackBody{
+					StkCallback: StkCallback{
+						MerchantRequestID: "29115-34620561-1",
+						CheckoutRequestID: "ws_CO_191220191020363925",
+						ResultCode:        1032,
+						ResultDesc:        "Request cancelled by user.",
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			callback, err := UnmarshalSTKPushCallback(tc.input)
+			if tc.wantError {
+				require.Error(t, err)
+				require.Nil(t, callback)
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, callback)
+			require.Equal(t, "ws_CO_191220191020363925", callback.Body.StkCallback.CheckoutRequestID)
 		})
 	}
 }

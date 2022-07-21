@@ -81,10 +81,15 @@ func NewApp(c HttpClient, consumerKey, consumerSecret string, env Environment) *
 	}
 }
 
+// Environment returns the current environment the app is running on.
+func (m *Mpesa) Environment() Environment {
+	return m.environment
+}
+
 // GenerateAccessToken returns a time bound access token to call allowed APIs.
 // This token should be used in all other subsequent responses to the APIs
 // GenerateAccessToken will also cache the access token for the specified refresh after period
-func (m *Mpesa) GenerateAccessToken() (string, error) {
+func (m *Mpesa) GenerateAccessToken(ctx context.Context) (string, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -94,7 +99,7 @@ func (m *Mpesa) GenerateAccessToken() (string, error) {
 		}
 	}
 
-	req, err := http.NewRequest(http.MethodGet, m.authURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, m.authURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("mpesa: error creating authorization http request - %v", err)
 	}
@@ -115,7 +120,7 @@ func (m *Mpesa) GenerateAccessToken() (string, error) {
 
 	var response AuthorizationResponse
 	if err := json.NewDecoder(res.Body).Decode(&response); err != nil {
-		return "", fmt.Errorf("mpesa: error decoding authorization response - %v", err.Error())
+		return "", fmt.Errorf("mpesa: error decoding authorization response - %v", err)
 	}
 
 	response.setAt = time.Now()
@@ -123,17 +128,8 @@ func (m *Mpesa) GenerateAccessToken() (string, error) {
 	return m.cache[m.consumerKey].AccessToken, nil
 }
 
-// Environment returns the current environment the app is running on.
-func (m *Mpesa) Environment() Environment {
-	return m.environment
-}
-
-// LipaNaMpesaOnline initiates online payment on behalf of a customer using STKPush.
-func (m *Mpesa) LipaNaMpesaOnline(
-	ctx context.Context,
-	passkey string,
-	stkReq *STKPushRequest,
-) (*STKPushRequestResponse, error) {
+// STKPush initiates online payment on behalf of a customer using STKPush.
+func (m *Mpesa) STKPush(ctx context.Context, passkey string, stkReq *STKPushRequest) (*STKPushRequestResponse, error) {
 	if passkey == "" {
 		return nil, ErrInvalidPasskey
 	}
@@ -152,7 +148,7 @@ func (m *Mpesa) LipaNaMpesaOnline(
 		return nil, fmt.Errorf("mpesa: error creating stk push request - %v", err)
 	}
 
-	accessToken, err := m.GenerateAccessToken()
+	accessToken, err := m.GenerateAccessToken(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +166,7 @@ func (m *Mpesa) LipaNaMpesaOnline(
 
 	var resp STKPushRequestResponse
 	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
-		return nil, fmt.Errorf("mpesa: error decoding stk push request response - %v", err.Error())
+		return nil, fmt.Errorf("mpesa: error decoding stk push request response - %v", err)
 	}
 
 	if resp.ErrorCode != "" {
@@ -183,4 +179,25 @@ func (m *Mpesa) LipaNaMpesaOnline(
 	}
 
 	return &resp, nil
+}
+
+// UnmarshalSTKPushCallback decodes the provided value to STKPushCallback.
+func UnmarshalSTKPushCallback(in interface{}) (out *STKPushCallback, err error) {
+	var b []byte
+
+	switch in := in.(type) {
+	case string:
+		b = []byte(in)
+	default:
+		if b, err = json.Marshal(in); err != nil {
+			return nil, err
+		}
+	}
+
+	var callback STKPushCallback
+	if err := json.Unmarshal(b, &callback); err != nil {
+		return nil, fmt.Errorf("mpesa: error unmarshling stk push callback - %v", err)
+	}
+
+	return &callback, nil
 }

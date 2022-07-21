@@ -93,37 +93,69 @@ type (
 		ErrorMessage string `json:"errorMessage,omitempty"`
 	}
 
-	// LipaNaMpesaOnlineCallback is the response sent back sent to the callback URL after making an STKPush request
-	LipaNaMpesaOnlineCallback struct {
-		// This is the root key for the entire Callback message.
-		Body struct {
-			// This is the first child of the Body.
-			StkCallback struct {
-				// This is a global unique Identifier for any submitted payment request.
-				// This is the same value returned in the acknowledgement message of the initial request.
-				MerchantRequestID string `json:"MerchantRequestID"`
-				// This is a global unique identifier of the processed checkout transaction request.
-				// This is the same value returned in the acknowledgement message of the initial request.
-				CheckoutRequestID string `json:"CheckoutRequestID"`
-				// This is a numeric status code that indicates the status of the transaction processing.
-				// 0 means successful processing and any other code means an error occurred or the transaction failed.
-				ResultCode int `json:"ResultCode"`
-				// Result description is a message from the API that gives the status of the request processing,
-				// usually maps to a specific ResultCode value.
-				// It can be a Success processing message or an error description message.
-				ResultDesc string `json:"ResultDesc"`
-				// This is the JSON object that holds more details for the transaction.
-				// It is only returned for Successful transaction.
-				CallbackMetadata struct {
-					// This is a JSON Array, within the CallbackMetadata, that holds additional transaction details in
-					// JSON objects. Since this array is returned under the CallbackMetadata,
-					// it is only returned for Successful transaction.
-					Item []struct {
-						Name  string      `json:"Name"`
-						Value interface{} `json:"Value,omitempty"`
-					} `json:"Item"`
-				} `json:"CallbackMetadata"`
-			} `json:"stkCallback"`
-		} `json:"Body"`
+	StkCallback struct {
+		// MerchantRequestID is a global unique Identifier for any submitted payment request. It is the same
+		// value returned to the acknowledgement message on the STKPushRequestResponse.
+		MerchantRequestID string `json:"MerchantRequestID"`
+
+		// CheckoutRequestID is a global unique identifier of the processed checkout transaction request.
+		// It is the same value returned to the acknowledgement message on the STKPushRequestResponse.
+		CheckoutRequestID string `json:"CheckoutRequestID"`
+
+		// ResultCode is a numeric status code that indicates the status of the transaction processing.
+		// 0 means successful processing and any other code means an error occurred or the transaction failed.
+		ResultCode int `json:"ResultCode"`
+
+		// ResultDesc is a message from the API that gives the status of the request processing. It usually maps
+		// to a specific ResultCode value. It can be a success or an error description message.
+		ResultDesc string `json:"ResultDesc"`
+
+		// CallbackMetadata is the JSON object that holds more details for the transaction.
+		// It is only returned for successful transaction.
+		//
+		// Successful transaction contains this sample payload:
+		//
+		// {
+		//   "CallbackMetadata":{
+		//      "Item":[
+		//         {
+		//            "Name":"Amount",
+		//            "Value":1.00
+		//         },
+		//         {
+		//            "Name":"MpesaReceiptNumber",
+		//            "Value":"NLJ7RT61SV"
+		//         },
+		//         {
+		//            "Name":"TransactionDate",
+		//            "Value":20191219102115
+		//         },
+		//         {
+		//            "Name":"PhoneNumber",
+		//            "Value":254708374149
+		//         }
+		//      ]
+		//   }
+		// }
+		//
+		CallbackMetadata struct {
+			// Item is a JSON Array, within the CallbackMetadata, that holds additional transaction details in
+			// JSON objects. It is only returned for Successful transaction as part of CallbackMetadata
+			Item []struct {
+				Name  string      `json:"Name"`
+				Value interface{} `json:"Value,omitempty"`
+			} `json:"Item"`
+		} `json:"CallbackMetadata"`
+	}
+
+	STKPushCallbackBody struct {
+		// StkCallback stores the data related to the request.
+		StkCallback StkCallback `json:"stkCallback"`
+	}
+
+	// STKPushCallback is the response sent back sent to the callback URL after making the STKPushRequest
+	STKPushCallback struct {
+		// Body is the root key for the entire callback message.
+		Body STKPushCallbackBody `json:"Body"`
 	}
 )
