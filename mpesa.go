@@ -211,16 +211,10 @@ func (m *Mpesa) STKPush(ctx context.Context, passkey string, stkReq STKPushReque
 }
 
 // UnmarshalSTKPushCallback decodes the provided value to STKPushCallback.
-func UnmarshalSTKPushCallback(in interface{}) (out *STKPushCallback, err error) {
-	var b []byte
-
-	switch in := in.(type) {
-	case string:
-		b = []byte(in)
-	default:
-		if b, err = json.Marshal(in); err != nil {
-			return nil, err
-		}
+func UnmarshalSTKPushCallback(in interface{}) (*STKPushCallback, error) {
+	b, err := toBytes(in)
+	if err != nil {
+		return nil, fmt.Errorf("mpesa: error unmarshing input - %v", err)
 	}
 
 	var callback STKPushCallback
@@ -287,4 +281,19 @@ func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, b2cReq B2CRequest)
 	}
 
 	return &resp, nil
+}
+
+// UnmarshalB2CCallback decodes the provided value to B2CCallback
+func UnmarshalB2CCallback(in interface{}) (*B2CCallback, error) {
+	b, err := toBytes(in)
+	if err != nil {
+		return nil, fmt.Errorf("mpesa: error unmarshing input - %v", err)
+	}
+
+	var callback B2CCallback
+	if err := json.Unmarshal(b, &callback); err != nil {
+		return nil, fmt.Errorf("mpesa: error unmarshling stk push callback - %v", err)
+	}
+
+	return &callback, nil
 }
