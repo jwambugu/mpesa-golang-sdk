@@ -239,9 +239,8 @@ func TestMpesa_LipaNaMpesaOnline(t *testing.T) {
 
 func TestUnmarshalSTKPushCallback(t *testing.T) {
 	tests := []struct {
-		name      string
-		input     interface{}
-		wantError bool
+		name  string
+		input interface{}
 	}{
 		{
 			name: "it can unmarshal a successful transaction callback string",
@@ -277,10 +276,10 @@ func TestUnmarshalSTKPushCallback(t *testing.T) {
 			}`,
 		},
 		{
-			name: "it can unmarshal a unsuccessful transaction callback struct",
+			name: "it can unmarshal an unsuccessful transaction callback struct",
 			input: STKPushCallback{
 				Body: STKPushCallbackBody{
-					StkCallback: StkCallback{
+					STKCallback: STKCallback{
 						MerchantRequestID: "29115-34620561-1",
 						CheckoutRequestID: "ws_CO_191220191020363925",
 						ResultCode:        1032,
@@ -297,15 +296,9 @@ func TestUnmarshalSTKPushCallback(t *testing.T) {
 			t.Parallel()
 
 			callback, err := UnmarshalSTKPushCallback(tc.input)
-			if tc.wantError {
-				require.Error(t, err)
-				require.Nil(t, callback)
-				return
-			}
-
 			require.NoError(t, err)
 			require.NotNil(t, callback)
-			require.Equal(t, "ws_CO_191220191020363925", callback.Body.StkCallback.CheckoutRequestID)
+			require.Equal(t, "ws_CO_191220191020363925", callback.Body.STKCallback.CheckoutRequestID)
 		})
 	}
 }
@@ -452,6 +445,100 @@ func TestMpesa_B2C(t *testing.T) {
 			_, err := app.GenerateAccessToken(ctx)
 			require.NoError(t, err)
 			require.Len(t, cl.requests, 2)
+		})
+	}
+}
+
+func TestUnmarshalB2CCallback(t *testing.T) {
+	tests := []struct {
+		name  string
+		input interface{}
+	}{
+		{
+			name: "it can unmarshal a successful transaction callback string",
+			input: `
+			{    
+			   "Result": {
+				  "ResultType": 0,
+				  "ResultCode": 0,
+				  "ResultDesc": "The service request is processed successfully.", 
+				  "OriginatorConversationID": "10571-7910404-1",
+				  "ConversationID": "AG_20191219_00004e48cf7e3533f581",
+				  "TransactionID": "NLJ41HAY6Q",
+				  "ResultParameters": {
+					 "ResultParameter": [
+					  {
+						 "Key": "TransactionAmount",
+						 "Value": 10
+					  },
+					  {
+						 "Key": "TransactionReceipt",
+						 "Value": "NLJ41HAY6Q"
+					  },
+					  {
+						 "Key": "B2CRecipientIsRegisteredCustomer",
+						 "Value": "Y"
+					  },
+					  {
+						 "Key": "B2CChargesPaidAccountAvailableFunds",
+						 "Value": -4510.00
+					  },
+					  {
+						 "Key": "ReceiverPartyPublicName",
+						 "Value": "254708374149 - John Doe"
+					  },
+					  {
+						 "Key": "TransactionCompletedDateTime",
+						 "Value": "19.12.2019 11:45:50"
+					  },
+					  {
+						 "Key": "B2CUtilityAccountAvailableFunds",
+						 "Value": 10116.00
+					  },
+					  {
+						 "Key": "B2CWorkingAccountAvailableFunds",
+						 "Value": 900000.00
+					  }
+					]
+				  },
+				  "ReferenceData": {
+					 "ReferenceItem": {
+						"Key": "QueueTimeoutURL",
+						"Value": "https:\/\/internalsandbox.safaricom.co.ke\/mpesa\/b2cresults\/v1\/submit"
+					  }
+				  }
+			   }
+			}`,
+		},
+		{
+			name: "it can unmarshal an unsuccessful transaction callback struct",
+			input: B2CCallback{
+				Result: B2CCallbackResult{
+					ResultType:               0,
+					ResultCode:               0,
+					ResultDesc:               "The initiator information is invalid.",
+					OriginatorConversationID: "29112-34801843-1",
+					ConversationID:           "AG_20191219_00004e48cf7e3533f581",
+					TransactionID:            "NLJ41HAY6Q",
+					ReferenceData: B2CReferenceData{
+						ReferenceItem: B2CReferenceItem{
+							Key:   "QueueTimeoutURL",
+							Value: "https:\\/\\/internalsandbox.safaricom.co.ke\\/mpesa\\/b2cresults\\/v1\\/submit",
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			callback, err := UnmarshalB2CCallback(tc.input)
+			require.NoError(t, err)
+			require.NotNil(t, callback)
+			require.Equal(t, "AG_20191219_00004e48cf7e3533f581", callback.Result.ConversationID)
+			require.Equal(t, "QueueTimeoutURL", callback.Result.ReferenceData.ReferenceItem.Key)
 		})
 	}
 }

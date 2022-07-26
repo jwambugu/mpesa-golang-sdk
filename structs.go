@@ -91,7 +91,18 @@ type (
 		ErrorMessage string `json:"errorMessage,omitempty"`
 	}
 
-	StkCallback struct {
+	STKCallbackItem struct {
+		Name  string      `json:"Name"`
+		Value interface{} `json:"Value,omitempty"`
+	}
+
+	STKCallbackMetadata struct {
+		// Item is a JSON Array, within the CallbackMetadata, that holds additional transaction details in
+		// JSON objects. It is only returned for Successful transaction as part of CallbackMetadata
+		Item []STKCallbackItem `json:"Item"`
+	}
+
+	STKCallback struct {
 		// MerchantRequestID is a global unique Identifier for any submitted payment request. It is the same
 		// value returned to the acknowledgement message on the STKPushRequestResponse.
 		MerchantRequestID string `json:"MerchantRequestID"`
@@ -136,19 +147,12 @@ type (
 		//   }
 		// }
 		//
-		CallbackMetadata struct {
-			// Item is a JSON Array, within the CallbackMetadata, that holds additional transaction details in
-			// JSON objects. It is only returned for Successful transaction as part of CallbackMetadata
-			Item []struct {
-				Name  string      `json:"Name"`
-				Value interface{} `json:"Value,omitempty"`
-			} `json:"Item"`
-		} `json:"CallbackMetadata"`
+		CallbackMetadata STKCallbackMetadata `json:"CallbackMetadata"`
 	}
 
 	STKPushCallbackBody struct {
-		// StkCallback stores the data related to the request.
-		StkCallback StkCallback `json:"stkCallback"`
+		// STKCallback stores the data related to the request.
+		STKCallback STKCallback `json:"stkCallback"`
 	}
 
 	// STKPushCallback is the response sent back sent to the callback URL after making the STKPushRequest
@@ -222,5 +226,63 @@ type (
 
 		// ErrorMessage is a short descriptive message of the failure reason.
 		ErrorMessage string `json:"errorMessage"`
+	}
+
+	// ResultParameter holds additional transaction details.
+	// Details available:
+	// 1:
+	ResultParameter struct {
+		Key   string      `json:"Key"`
+		Value interface{} `json:"Value"`
+	}
+
+	B2CResultParameters struct {
+		// ResultParameter is a JSON array within the B2CResultParameters.
+		ResultParameter []ResultParameter `json:"ResultParameter"`
+	}
+
+	B2CReferenceItem struct {
+		Key   string `json:"Key"`
+		Value string `json:"Value"`
+	}
+
+	B2CReferenceData struct {
+		ReferenceItem B2CReferenceItem `json:"ReferenceItem"`
+	}
+
+	B2CCallbackResult struct {
+		// ConversationID is a global unique identifier for the transaction request returned by the M-Pesa
+		// upon successful request submission.
+		ConversationID string `json:"ConversationID"`
+
+		// OriginatorConversationID is a global unique identifier for the transaction request returned by the API
+		// proxy upon successful request submission.
+		OriginatorConversationID string `json:"OriginatorConversationID"`
+
+		ReferenceData B2CReferenceData `json:"ReferenceData"`
+
+		// ResultCode is a numeric status code that indicates the status of the transaction processing.
+		// 0 means success and any other code means an error occurred or the transaction failed.
+		ResultCode int `json:"ResultCode"`
+
+		// ResultDesc is a message from the API that gives the status of the request processing and usually maps to
+		// a specific ResultCode value.
+		ResultDesc string `json:"ResultDesc"`
+
+		// ResultParameters is a JSON object that holds more details for the transaction.
+		ResultParameters B2CResultParameters `json:"ResultParameters"`
+
+		// ResultType is a status code that indicates whether the transaction was already sent to your listener.
+		// Usual value is 0.
+		ResultType int `json:"ResultType"`
+
+		// TransactionID is a unique M-PESA transaction ID for every payment request. Same value is sent to customer
+		// over SMS upon successful processing.
+		TransactionID string `json:"TransactionID"`
+	}
+
+	B2CCallback struct {
+		// Result is the root parameter that encloses the entire result message.
+		Result B2CCallbackResult `json:"Result"`
 	}
 )
