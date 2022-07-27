@@ -122,7 +122,7 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 	}
 }
 
-func TestMpesa_LipaNaMpesaOnline(t *testing.T) {
+func TestMpesa_STKPush(t *testing.T) {
 	tests := []struct {
 		name   string
 		stkReq STKPushRequest
@@ -131,11 +131,11 @@ func TestMpesa_LipaNaMpesaOnline(t *testing.T) {
 		{
 			name: "it makes stk push request successfully",
 			stkReq: STKPushRequest{
-				BusinessShortCode: "174379",
+				BusinessShortCode: 174379,
 				TransactionType:   "CustomerPayBillOnline",
 				Amount:            10,
 				PartyA:            254708374149,
-				PartyB:            "174379",
+				PartyB:            174379,
 				PhoneNumber:       254708374149,
 				CallBackURL:       "https://example.com",
 				AccountReference:  "Test",
@@ -156,7 +156,7 @@ func TestMpesa_LipaNaMpesaOnline(t *testing.T) {
 					require.NoError(t, err)
 
 					timestamp := time.Now().Format("20060102150405")
-					wantPassword := fmt.Sprintf("%s%s%s", stkReq.BusinessShortCode, passkey, timestamp)
+					wantPassword := fmt.Sprintf("%d%s%s", stkReq.BusinessShortCode, passkey, timestamp)
 
 					gotPassword := make([]byte, base64.StdEncoding.DecodedLen(len(reqParams.Password)))
 					n, err := base64.StdEncoding.Decode(gotPassword, []byte(reqParams.Password))
@@ -182,11 +182,11 @@ func TestMpesa_LipaNaMpesaOnline(t *testing.T) {
 		{
 			name: "request fails with an error code",
 			stkReq: STKPushRequest{
-				BusinessShortCode: "",
+				BusinessShortCode: 0,
 				TransactionType:   "CustomerPayBillOnline",
 				Amount:            10,
 				PartyA:            254708374149,
-				PartyB:            "174379",
+				PartyB:            174379,
 				PhoneNumber:       254708374149,
 				CallBackURL:       "https://example.com",
 				AccountReference:  "Test",
@@ -313,16 +313,15 @@ func TestMpesa_B2C(t *testing.T) {
 		{
 			name: "it makes a b2c request on sandbox successfully",
 			b2cReq: B2CRequest{
-				InitiatorName:      "TestG2Init",
-				SecurityCredential: "BusinessPayment",
-				CommandID:          "",
-				Amount:             10,
-				PartyA:             "600123",
-				PartyB:             "254728762287",
-				Remarks:            "This is a remark",
-				QueueTimeOutURL:    "https://example.com",
-				ResultURL:          "https://example.com",
-				Occasion:           "Test Occasion",
+				InitiatorName:   "TestG2Init",
+				CommandID:       "BusinessPayment",
+				Amount:          10,
+				PartyA:          600123,
+				PartyB:          254728762287,
+				Remarks:         "This is a remark",
+				QueueTimeOutURL: "https://example.com",
+				ResultURL:       "https://example.com",
+				Occasion:        "Test Occasion",
 			},
 			env: Sandbox,
 			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, b2cReq B2CRequest) {
@@ -356,16 +355,15 @@ func TestMpesa_B2C(t *testing.T) {
 		{
 			name: "it makes a b2c request on production successfully",
 			b2cReq: B2CRequest{
-				InitiatorName:      "TestG2Init",
-				SecurityCredential: "BusinessPayment",
-				CommandID:          "",
-				Amount:             10,
-				PartyA:             "600123",
-				PartyB:             "254728762287",
-				Remarks:            "This is a remark",
-				QueueTimeOutURL:    "https://example.com",
-				ResultURL:          "https://example.com",
-				Occasion:           "Test Occasion",
+				InitiatorName:   "TestG2Init",
+				CommandID:       "BusinessPayment",
+				Amount:          10,
+				PartyA:          600123,
+				PartyB:          254728762287,
+				Remarks:         "This is a remark",
+				QueueTimeOutURL: "https://example.com",
+				ResultURL:       "https://example.com",
+				Occasion:        "Test Occasion",
 			},
 			env: Production,
 			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, b2cReq B2CRequest) {
@@ -394,16 +392,15 @@ func TestMpesa_B2C(t *testing.T) {
 		{
 			name: "request fails with an error code",
 			b2cReq: B2CRequest{
-				InitiatorName:      "",
-				SecurityCredential: "BusinessPayment",
-				CommandID:          "",
-				Amount:             10,
-				PartyA:             "600123",
-				PartyB:             "254728762287",
-				Remarks:            "This is a remark",
-				QueueTimeOutURL:    "https://example.com",
-				ResultURL:          "https://example.com",
-				Occasion:           "Test Occasion",
+				InitiatorName:   "",
+				CommandID:       "BusinessPayment",
+				Amount:          10,
+				PartyA:          600123,
+				PartyB:          254728762287,
+				Remarks:         "This is a remark",
+				QueueTimeOutURL: "https://example.com",
+				ResultURL:       "https://example.com",
+				Occasion:        "Test Occasion",
 			},
 			env: Production,
 			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, b2cReq B2CRequest) {

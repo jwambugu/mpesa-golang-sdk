@@ -16,7 +16,7 @@ type (
 	STKPushRequest struct {
 		// BusinessShortCode is organizations shortcode (Paybill or Buy goods - A 5 to 7-digit account number) used to
 		// identify an organization and receive the transaction.
-		BusinessShortCode string `json:"BusinessShortCode"`
+		BusinessShortCode uint `json:"BusinessShortCode"`
 
 		// Password is a base64 encoded string used for encrypting the request sent which is a combination of
 		// BusinessShortCode + Passkey + Timestamp
@@ -36,11 +36,11 @@ type (
 
 		// PartyA is phone number sending money. The parameter expected is a valid Safaricom Mobile Number that is
 		// M-Pesa registered in the format 2547XXXXXXXX
-		PartyA uint64 `json:"PartyA"`
+		PartyA uint `json:"PartyA"`
 
 		// PartyB is the organization receiving the funds. The parameter expected is a 5 to 7 digit as defined on
 		// the Shortcode description which can also be the same as BusinessShortCode value.
-		PartyB string `json:"PartyB,omitempty"`
+		PartyB uint `json:"PartyB,omitempty"`
 
 		// PhoneNumber to receive the STK Pin Prompt which can be same as PartyA value.
 		PhoneNumber uint64 `json:"PhoneNumber,omitempty"`
@@ -181,10 +181,10 @@ type (
 		Amount uint `json:"Amount"`
 
 		// PartyA is the B2C organization shortcode from which the money is to be from.
-		PartyA string `json:"PartyA"`
+		PartyA uint `json:"PartyA"`
 
 		// PartyB is the customer mobile number to receive the amount which should have the country code (254).
-		PartyB string `json:"PartyB"`
+		PartyB uint64 `json:"PartyB"`
 
 		// Remarks represents any additional information to be associated with the transaction.
 		Remarks string `json:"Remarks"`
