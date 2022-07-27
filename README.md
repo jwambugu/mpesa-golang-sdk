@@ -2,10 +2,6 @@
 
 Mpesa Golang SDK facilitates in integrating M-pesa APIS into your go project. The package currently includes the following APIs
 
-1. [Authorization](https://developer.safaricom.co.ke/APIs/Authorization): generates an access token for authenticating APIs
-1. [Lipa Na M-Pesa Online API](https://developer.safaricom.co.ke/APIs/MpesaExpressSimulate): initiates online payment on behalf of a customer.
-1. [Business To Customer (B2C)](https://developer.safaricom.co.ke/APIs/BusinessToCustomer): Transact between an M-Pesa short code to a phone number registered on M-Pesa
-
 | API                                                                                       | Description                                                                   |
 |-------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------|
 | [Authorization](https://developer.safaricom.co.ke/APIs/Authorization)                     | Generates an access token for authenticating APIs                             |
