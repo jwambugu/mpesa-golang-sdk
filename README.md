@@ -1,6 +1,6 @@
 # About Mpesa Golang SDK
 
-Mpesa Golang SDK facilitates in integrating M-pesa APIS into your go project. The package currently includes the following APIs
+Mpesa Golang SDK facilitates in integrating M-pesa APIS into your go project. The following APIs are currently supported:
 
 | API                                                                                       | Description                                                                   |
 |-------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------|
@@ -26,7 +26,10 @@ To use the APIs, follow these steps:
 ## Usage/Examples
 
 ### Environments
-The SDK supports the following environments
+The SDK supports the following environments:
+
+1.`mpesa.Sandbox` for test environment.
+2.`mpesa.Production` for production environment once you go live.
 
 ### Lipa na M-Pesa Online Payment (STK Push)
 
