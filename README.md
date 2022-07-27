@@ -28,8 +28,8 @@ To use the APIs, follow these steps:
 ### Environments
 The SDK supports the following environments:
 
-1.`mpesa.Sandbox` for test environment.
-2.`mpesa.Production` for production environment once you go live.
+1. `mpesa.Sandbox` for test environment.
+2. `mpesa.Production` for production environment once you go live.
 
 ### Lipa na M-Pesa Online Payment (STK Push)
 
