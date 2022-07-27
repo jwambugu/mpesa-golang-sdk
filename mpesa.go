@@ -72,7 +72,7 @@ const (
 	productionBaseURL = "https://api.safaricom.co.ke"
 )
 
-// NewApp initializes a new Mpesa app that will be used to perform C2B or B2C transaction
+// NewApp initializes a new Mpesa app that will be used to perform C2B or B2C transactions.
 func NewApp(c HttpClient, consumerKey, consumerSecret string, env Environment) *Mpesa {
 	if c == nil {
 		c = &http.Client{
