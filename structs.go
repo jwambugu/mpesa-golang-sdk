@@ -16,7 +16,7 @@ type (
 	STKPushRequest struct {
 		// BusinessShortCode is organizations shortcode (Paybill or Buy goods - A 5 to 7-digit account number) used to
 		// identify an organization and receive the transaction.
-		BusinessShortCode string `json:"BusinessShortCode"`
+		BusinessShortCode uint `json:"BusinessShortCode"`
 
 		// Password is a base64 encoded string used for encrypting the request sent which is a combination of
 		// BusinessShortCode + Passkey + Timestamp

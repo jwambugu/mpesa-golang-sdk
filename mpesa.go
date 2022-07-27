@@ -93,6 +93,7 @@ func NewApp(c HttpClient, consumerKey, consumerSecret string, env Environment) *
 		consumerSecret: consumerSecret,
 		authURL:        baseUrl + `/oauth/v1/generate?grant_type=client_credentials`,
 		stkPushURL:     baseUrl + `/mpesa/stkpush/v1/processrequest`,
+		b2cURL:         baseUrl + `/mpesa/b2c/v1/paymentrequest`,
 	}
 }
 
@@ -182,8 +183,9 @@ func (m *Mpesa) STKPush(ctx context.Context, passkey string, stkReq STKPushReque
 	}
 
 	timestamp := time.Now().Format("20060102150405")
-	password := fmt.Sprintf("%s%s%s", stkReq.BusinessShortCode, passkey, timestamp)
+	password := fmt.Sprintf("%d%s%s", stkReq.BusinessShortCode, passkey, timestamp)
 	stkReq.Password = base64.StdEncoding.EncodeToString([]byte(password))
+	stkReq.Timestamp = timestamp
 
 	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.stkPushURL, stkReq, stkPush)
 	if err != nil {
@@ -194,7 +196,7 @@ func (m *Mpesa) STKPush(ctx context.Context, passkey string, stkReq STKPushReque
 	defer res.Body.Close()
 
 	var resp STKPushRequestResponse
-	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
+	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
 		return nil, fmt.Errorf("mpesa: error decoding stk push request response - %v", err)
 	}
 

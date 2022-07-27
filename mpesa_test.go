@@ -122,7 +122,7 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 	}
 }
 
-func TestMpesa_LipaNaMpesaOnline(t *testing.T) {
+func TestMpesa_STKPush(t *testing.T) {
 	tests := []struct {
 		name   string
 		stkReq STKPushRequest
@@ -131,7 +131,7 @@ func TestMpesa_LipaNaMpesaOnline(t *testing.T) {
 		{
 			name: "it makes stk push request successfully",
 			stkReq: STKPushRequest{
-				BusinessShortCode: "174379",
+				BusinessShortCode: 174379,
 				TransactionType:   "CustomerPayBillOnline",
 				Amount:            10,
 				PartyA:            254708374149,
@@ -156,7 +156,7 @@ func TestMpesa_LipaNaMpesaOnline(t *testing.T) {
 					require.NoError(t, err)
 
 					timestamp := time.Now().Format("20060102150405")
-					wantPassword := fmt.Sprintf("%s%s%s", stkReq.BusinessShortCode, passkey, timestamp)
+					wantPassword := fmt.Sprintf("%d%s%s", stkReq.BusinessShortCode, passkey, timestamp)
 
 					gotPassword := make([]byte, base64.StdEncoding.DecodedLen(len(reqParams.Password)))
 					n, err := base64.StdEncoding.Decode(gotPassword, []byte(reqParams.Password))
@@ -182,7 +182,7 @@ func TestMpesa_LipaNaMpesaOnline(t *testing.T) {
 		{
 			name: "request fails with an error code",
 			stkReq: STKPushRequest{
-				BusinessShortCode: "",
+				BusinessShortCode: 0,
 				TransactionType:   "CustomerPayBillOnline",
 				Amount:            10,
 				PartyA:            254708374149,
