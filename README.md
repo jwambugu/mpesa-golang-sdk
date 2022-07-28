@@ -31,9 +31,7 @@ The SDK supports the following environments:
 1. `mpesa.Sandbox` for test environment.
 2. `mpesa.Production` for production environment once you go live.
 
-### Lipa na M-Pesa Online Payment (STK Push)
-
-This API is used to initiate an M-Pesa transaction on behalf of a customer using STK Push.
+### Examples
 
 ```go
 package main
@@ -50,10 +48,9 @@ func main() {
     ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
     defer cancel()
     
-    //mpesaApp := mpesa.NewApp(http.DefaultClient, "CONSUMER_KEY_GOES_HERE", "CONSUMER_SECRET_GOES_HERE", mpesa.Sandbox)
     mpesaApp := mpesa.NewApp(http.DefaultClient, "CONSUMER_KEY_GOES_HERE", "CONSUMER_SECRET_GOES_HERE", mpesa.Sandbox)
     
-    res, err := mpesaApp.STKPush(ctx, "PASSKEY_GOES_HERE", mpesa.STKPushRequest{
+    stkPushRes, err := mpesaApp.STKPush(ctx, "PASSKEY_GOES_HERE", mpesa.STKPushRequest{
         BusinessShortCode: 174379,
         TransactionType:   "CustomerPayBillOnline",
         Amount:            10,
@@ -69,49 +66,25 @@ func main() {
         log.Fatalln(err)
     }
     
-    log.Printf("%+v", res)
-}
-```
-
-### B2C API
-
-This API enables Business to Customer (B2C) transactions between a company and customers who are the end-users of its
-products or services.
-
-```go
-package main
-
-import (
-	"context"
-	"github.com/jwambugu/mpesa-golang-sdk"
-	"log"
-	"net/http"
-	"time"
-)
-
-func main() {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	mpesaApp := mpesa.NewApp(http.DefaultClient, "CONSUMER_KEY_GOES_HERE", "CONSUMER_SECRET_GOES_HERE", mpesa.Sandbox)
-
-	res, err := mpesaApp.B2C(ctx, "INITIATOR_PASSWORD_GOES_HERE", mpesa.B2CRequest{
-            InitiatorName:   "TestG2Init",
-            CommandID:       "BusinessPayment",
-            Amount:          10,
-            PartyA:          600123,
-            PartyB:          254728762287,
-            Remarks:         "This is a remark",
-            QueueTimeOutURL: "https://example.com",
-            ResultURL:       "https://example.com",
-            Occasion:        "Test Occasion",
-	})
-
-        if err != nil {
-            log.Fatalln(err)
-        }
-
-        log.Printf("%+v", res)
+    log.Printf("%+v", stkPushRes)
+    
+    b2cRes, err := mpesaApp.B2C(ctx, "INITIATOR_PASSWORD_GOES_HERE", mpesa.B2CRequest{
+        InitiatorName:   "TestG2Init",
+        CommandID:       "BusinessPayment",
+        Amount:          10,
+        PartyA:          600123,
+        PartyB:          254728762287,
+        Remarks:         "This is a remark",
+        QueueTimeOutURL: "https://example.com",
+        ResultURL:       "https://example.com",
+        Occasion:        "Test Occasion",
+    })
+    
+    if err != nil {
+        log.Fatalln(err)
+    }
+    
+    log.Printf("%+v", b2cRes)
 }
 ```
 
