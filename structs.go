@@ -285,4 +285,56 @@ type (
 		// Result is the root parameter that encloses the entire result message.
 		Result B2CCallbackResult `json:"Result"`
 	}
+
+	STKPushQueryRequest struct {
+		// BusinessShortCode is organizations shortcode (Paybill or Buy goods - A 5 to 7-digit account number) used to
+		// identify an organization and receive the transaction.
+		BusinessShortCode uint `json:"BusinessShortCode"`
+
+		// CheckoutRequestID is a global unique identifier of the processed checkout transaction request.
+		CheckoutRequestID string `json:"CheckoutRequestID"`
+
+		// Password is a base64 encoded string used for encrypting the request sent which is a combination of
+		// BusinessShortCode + Passkey + Timestamp
+		Password string `json:"Password"`
+
+		// Timestamp of the transaction in the format of YEAR+MONTH+DATE+HOUR+MINUTE+SECOND (YYYYMMDDHHmmss).
+		// Each part should be at least two digits apart from the year which takes four digits.
+		// Example 20060102150405
+		Timestamp string `json:"Timestamp"`
+	}
+
+	STKPushQueryResponse struct {
+		// CheckoutRequestID is a global unique identifier of the processed checkout transaction request.
+		CheckoutRequestID string `json:"CheckoutRequestID"`
+
+		// ErrorCode is a predefined code that indicates the reason for request failure that is defined in the
+		// ErrorMessage. The error codes maps to specific error message.
+		ErrorCode string `json:"errorCode,omitempty"`
+
+		// ErrorMessage is a short descriptive message of the failure reason.
+		ErrorMessage string `json:"errorMessage,omitempty"`
+
+		// MerchantRequestID is a global unique Identifier for any submited payment request.
+		MerchantRequestID string `json:"MerchantRequestID"`
+
+		// ResponseCode is a code that indicates the status of the transaction submission.
+		// 0 means successful submission and any other code means an error occured.
+		ResponseCode string `json:"ResponseCode"`
+
+		// ResponseDescription is an acknowledment message from the API that gives the status of the request submission
+		// usualy maps to a specific ResponseCode value. It can be a success submission message or an error description.
+		ResponseDescription string `json:"ResponseDescription"`
+
+		// ResultCode is a numeric status code that indicates the status of the transaction processing.
+		// 0 means successful processing and any other code means an error occured or the transaction failed.
+		ResultCode string `json:"ResultCode"`
+
+		// ResultDesc description is a message from the API that gives the status of the request processing, usualy maps
+		// to a specific ResultCode value. It can be a success or an error description message.
+		ResultDesc string `json:"ResultDesc"`
+
+		// RequestID is a unique request ID for the payment request
+		RequestID string `json:"requestId,omitempty"`
+	}
 )

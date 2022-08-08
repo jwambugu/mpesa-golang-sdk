@@ -18,7 +18,7 @@ import (
 )
 
 // Environment indicates the current mode the application is running on. Either Sandbox or Production.
-type Environment string
+type Environment uint8
 
 // cache stores the AuthorizationResponse for the specified accessTokenTTL
 type cache map[string]AuthorizationResponse
@@ -26,11 +26,12 @@ type cache map[string]AuthorizationResponse
 type identifier string
 
 const (
-	Sandbox    Environment = "sandbox"
-	Production Environment = "production"
+	Sandbox Environment = iota
+	Production
 
-	stkPush identifier = "stk_push"
-	b2c     identifier = "b2c"
+	stkPush      identifier = "stk push"
+	stkPushQuery identifier = "stk push query"
+	b2c          identifier = "b2c"
 )
 
 var accessTokenTTL = 55 * time.Minute
@@ -57,9 +58,10 @@ type Mpesa struct {
 	consumerKey    string
 	consumerSecret string
 
-	authURL    string
-	stkPushURL string
-	b2cURL     string
+	authURL         string
+	stkPushURL      string
+	b2cURL          string
+	stkPushQueryURL string
 }
 
 var (
@@ -86,15 +88,22 @@ func NewApp(c HttpClient, consumerKey, consumerSecret string, env Environment) *
 	}
 
 	return &Mpesa{
-		client:         c,
-		environment:    env,
-		cache:          make(cache),
-		consumerKey:    consumerKey,
-		consumerSecret: consumerSecret,
-		authURL:        baseUrl + `/oauth/v1/generate?grant_type=client_credentials`,
-		stkPushURL:     baseUrl + `/mpesa/stkpush/v1/processrequest`,
-		b2cURL:         baseUrl + `/mpesa/b2c/v1/paymentrequest`,
+		client:          c,
+		environment:     env,
+		cache:           make(cache),
+		consumerKey:     consumerKey,
+		consumerSecret:  consumerSecret,
+		authURL:         baseUrl + `/oauth/v1/generate?grant_type=client_credentials`,
+		stkPushURL:      baseUrl + `/mpesa/stkpush/v1/processrequest`,
+		b2cURL:          baseUrl + `/mpesa/b2c/v1/paymentrequest`,
+		stkPushQueryURL: baseUrl + `/mpesa/stkpushquery/v1/query`,
 	}
+}
+
+func generateTimestampAndPassword(shortcode uint, passkey string) (string, string) {
+	timestamp := time.Now().Format("20060102150405")
+	password := fmt.Sprintf("%d%s%s", shortcode, passkey, timestamp)
+	return timestamp, base64.StdEncoding.EncodeToString([]byte(password))
 }
 
 func (m *Mpesa) makeHttpRequestWithToken(
@@ -177,17 +186,14 @@ func (m *Mpesa) GenerateAccessToken(ctx context.Context) (string, error) {
 }
 
 // STKPush initiates online payment on behalf of a customer using STKPush.
-func (m *Mpesa) STKPush(ctx context.Context, passkey string, stkReq STKPushRequest) (*STKPushRequestResponse, error) {
+func (m *Mpesa) STKPush(ctx context.Context, passkey string, req STKPushRequest) (*STKPushRequestResponse, error) {
 	if passkey == "" {
 		return nil, ErrInvalidPasskey
 	}
 
-	timestamp := time.Now().Format("20060102150405")
-	password := fmt.Sprintf("%d%s%s", stkReq.BusinessShortCode, passkey, timestamp)
-	stkReq.Password = base64.StdEncoding.EncodeToString([]byte(password))
-	stkReq.Timestamp = timestamp
+	req.Timestamp, req.Password = generateTimestampAndPassword(req.BusinessShortCode, passkey)
 
-	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.stkPushURL, stkReq, stkPush)
+	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.stkPushURL, req, stkPush)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +234,7 @@ func UnmarshalSTKPushCallback(in interface{}) (*STKPushCallback, error) {
 }
 
 // B2C transacts between an M-Pesa short code to a phone number registered on M-Pesa
-func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, b2cReq B2CRequest) (*B2CRequestResponse, error) {
+func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*B2CRequestResponse, error) {
 	if initiatorPwd == "" {
 		return nil, ErrInvalidInitiatorPassword
 	}
@@ -258,9 +264,9 @@ func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, b2cReq B2CRequest)
 		return nil, fmt.Errorf("mpesa: error encrypting initiator password: %v", err)
 	}
 
-	b2cReq.SecurityCredential = base64.StdEncoding.EncodeToString(signature)
+	req.SecurityCredential = base64.StdEncoding.EncodeToString(signature)
 
-	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.b2cURL, b2cReq, b2c)
+	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.b2cURL, req, b2c)
 	if err != nil {
 		return nil, err
 	}
@@ -298,4 +304,41 @@ func UnmarshalB2CCallback(in interface{}) (*B2CCallback, error) {
 	}
 
 	return &callback, nil
+}
+
+// STKPushQuery checks the status of an STKPush payment.
+func (m *Mpesa) STKPushQuery(
+	ctx context.Context,
+	passkey string,
+	req STKPushQueryRequest,
+) (*STKPushQueryResponse, error) {
+	if passkey == "" {
+		return nil, ErrInvalidPasskey
+	}
+
+	req.Timestamp, req.Password = generateTimestampAndPassword(req.BusinessShortCode, passkey)
+
+	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.stkPushQueryURL, req, stkPushQuery)
+	if err != nil {
+		return nil, err
+	}
+
+	//goland:noinspection GoUnhandledErrorResult
+	defer res.Body.Close()
+
+	var resp STKPushQueryResponse
+	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
+		return nil, fmt.Errorf("mpesa: error decoding stk push query request response - %v", err)
+	}
+
+	if resp.ErrorCode != "" {
+		return nil, fmt.Errorf(
+			"mpesa: stk push query request ID %v failed with error code %v:%v",
+			resp.RequestID,
+			resp.ErrorCode,
+			resp.ErrorMessage,
+		)
+	}
+
+	return &resp, nil
 }

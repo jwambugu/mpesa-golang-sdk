@@ -221,10 +221,10 @@ func TestMpesa_STKPush(t *testing.T) {
 
 			cl.MockRequest(app.authURL, func() (status int, body string) {
 				return http.StatusOK, `
-						{
-						"access_token": "0A0v8OgxqqoocblflR58m9chMdnU",
-						"expires_in": "3599"
-						}`
+				{
+					"access_token": "0A0v8OgxqqoocblflR58m9chMdnU",
+					"expires_in": "3599"
+				}`
 			})
 
 			ctx := context.Background()
@@ -430,10 +430,10 @@ func TestMpesa_B2C(t *testing.T) {
 
 			cl.MockRequest(app.authURL, func() (status int, body string) {
 				return http.StatusOK, `
-						{
-						"access_token": "0A0v8OgxqqoocblflR58m9chMdnU",
-						"expires_in": "3599"
-						}`
+				{
+					"access_token": "0A0v8OgxqqoocblflR58m9chMdnU",
+					"expires_in": "3599"
+				}`
 			})
 
 			ctx := context.Background()
@@ -536,6 +536,101 @@ func TestUnmarshalB2CCallback(t *testing.T) {
 			require.NotNil(t, callback)
 			require.Equal(t, "AG_20191219_00004e48cf7e3533f581", callback.Result.ConversationID)
 			require.Equal(t, "QueueTimeoutURL", callback.Result.ReferenceData.ReferenceItem.Key)
+		})
+	}
+}
+
+func TestMpesa_STKPushQuery(t *testing.T) {
+	// 2022/08/03 13:13:34 mpesa: stk push query request ID ws_CO_03082022131319635708374149 failed with error code 500.001.1001:The transaction is being processed
+	tests := []struct {
+		name string
+		mock func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, stkReq STKPushQueryRequest)
+	}{
+		{
+			name: "it makes an stk push query request successfully",
+			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, stkReq STKPushQueryRequest) {
+				passkey := "passkey"
+
+				c.MockRequest(app.stkPushQueryURL, func() (status int, body string) {
+					req := c.requests[1]
+
+					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
+					wantAuthorizationHeader := `Bearer ` + app.cache[testConsumerKey].AccessToken
+					require.Equal(t, wantAuthorizationHeader, req.Header.Get("Authorization"))
+
+					var reqParams STKPushQueryRequest
+					err := json.NewDecoder(req.Body).Decode(&reqParams)
+					require.NoError(t, err)
+
+					timestamp := time.Now().Format("20060102150405")
+					wantPassword := fmt.Sprintf("%d%s%s", stkReq.BusinessShortCode, passkey, timestamp)
+
+					gotPassword := make([]byte, base64.StdEncoding.DecodedLen(len(reqParams.Password)))
+					n, err := base64.StdEncoding.Decode(gotPassword, []byte(reqParams.Password))
+					require.NoError(t, err)
+					require.Equal(t, wantPassword, string(gotPassword[:n]))
+
+					return http.StatusOK, `
+						{
+						  "ResponseCode": "0",
+						  "MerchantRequestID": "8773-65037085-1",
+						  "CheckoutRequestID": "ws_CO_03082022131319635708374149",
+						  "ResultCode": "1037",
+                          "ResultDesc": "The service request is processed successfully."
+						}`
+				})
+
+				res, err := app.STKPushQuery(ctx, passkey, stkReq)
+				require.NoError(t, err)
+				require.NotNil(t, res)
+			},
+		},
+		{
+			name: "the request fails if the transaction is being processed",
+			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, stkReq STKPushQueryRequest) {
+				passkey := "passkey"
+
+				c.MockRequest(app.stkPushQueryURL, func() (status int, body string) {
+					return http.StatusInternalServerError, `
+						{
+						  "RequestID": "ws_CO_03082022131319635708374149",
+						  "ErrorCode": "500.001.1001",
+						  "ErrorMessage": "The transaction is being processed"
+						}`
+				})
+
+				res, err := app.STKPushQuery(ctx, passkey, stkReq)
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "error code 500.001.1001:The transaction is being processed")
+				require.Nil(t, res)
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cl := newMockHttpClient()
+			app := NewApp(cl, testConsumerKey, testConsumerSecret, Sandbox)
+
+			cl.MockRequest(app.authURL, func() (status int, body string) {
+				return http.StatusOK, `
+				{
+					"access_token": "0A0v8OgxqqoocblflR58m9chMdnU",
+					"expires_in": "3599"
+				}`
+			})
+
+			_, err := app.GenerateAccessToken(context.Background())
+			require.NoError(t, err)
+
+			ctx := context.Background()
+			tc.mock(t, ctx, app, cl, STKPushQueryRequest{
+				BusinessShortCode: 174379,
+				CheckoutRequestID: "ws_CO_03082022131319635708374149",
+			})
 		})
 	}
 }
