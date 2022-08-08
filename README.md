@@ -89,7 +89,7 @@ func main() {
 
     stkQueryRes, err := mpesaApp.STKPushQuery(ctx, "PASSKEY_GOES_HERE", mpesa.STKPushQueryRequest{
         BusinessShortCode: 174379,
-        CheckoutRequestID: "STK PUSH CheckoutRequestID GOES HERE",
+        CheckoutRequestID: "ws_CO_03082022131319635708374149", // STK PUSH CheckoutRequestID,
     })
     
     if err != nil {
