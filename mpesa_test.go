@@ -541,7 +541,6 @@ func TestUnmarshalB2CCallback(t *testing.T) {
 }
 
 func TestMpesa_STKPushQuery(t *testing.T) {
-	// 2022/08/03 13:13:34 mpesa: stk push query request ID ws_CO_03082022131319635708374149 failed with error code 500.001.1001:The transaction is being processed
 	tests := []struct {
 		name string
 		mock func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, stkReq STKPushQueryRequest)
@@ -576,7 +575,7 @@ func TestMpesa_STKPushQuery(t *testing.T) {
 						  "MerchantRequestID": "8773-65037085-1",
 						  "CheckoutRequestID": "ws_CO_03082022131319635708374149",
 						  "ResultCode": "1037",
-                          "ResultDesc": "The service request is processed successfully."
+                          "ResultDesc": "DS timeout user cannot be reached RequestID."
 						}`
 				})
 
