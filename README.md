@@ -7,6 +7,7 @@ Mpesa Golang SDK facilitates in integrating M-pesa APIS into your go project. Th
 | [Authorization](https://developer.safaricom.co.ke/APIs/Authorization)                     | Generates an access token for authenticating APIs                             |
 | [Lipa Na M-Pesa Online API](https://developer.safaricom.co.ke/APIs/MpesaExpressSimulate)  | Initiates online payment on behalf of a customer.                             |
 | [Business To Customer  (B2C) ](https://developer.safaricom.co.ke/APIs/BusinessToCustomer) | Transact between an M-Pesa short code to a phone number registered on M-Pesa. |
+| [M-Pesa Express Query](https://sandbox.safaricom.co.ke/mpesa/stkpushquery/v1/query)       | Check the status of a Lipa Na M-Pesa Online Payment.                          |
 
 ## Getting Started
 
@@ -85,6 +86,17 @@ func main() {
     }
     
     log.Printf("%+v", b2cRes)
+
+    stkQueryRes, err := mpesaApp.STKPushQuery(ctx, "PASSKEY_GOES_HERE", mpesa.STKPushQueryRequest{
+        BusinessShortCode: 174379,
+        CheckoutRequestID: "STK PUSH CheckoutRequestID GOES HERE",
+    })
+    
+    if err != nil {
+        log.Fatalln(err)
+    }
+    
+    log.Printf("%+v", stkQueryRes)
 }
 ```
 
