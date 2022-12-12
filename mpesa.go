@@ -25,13 +25,26 @@ type cache map[string]AuthorizationResponse
 
 type identifier string
 
-const (
-	Sandbox Environment = iota
-	Production
+type IdentifierType uint8
 
+const (
+	Unknown Environment = iota
+	// Sandbox represents the test Environment
+	Sandbox
+	// Production represent the live Environment
+	Production
+)
+
+const (
 	stkPush      identifier = "stk push"
 	stkPushQuery identifier = "stk push query"
 	b2c          identifier = "b2c"
+)
+
+const (
+	MSISDN     IdentifierType = 1
+	TillNumber IdentifierType = 2
+	ShortCode  IdentifierType = 4
 )
 
 var accessTokenTTL = 55 * time.Minute
@@ -50,18 +63,19 @@ var certFS embed.FS
 
 // Mpesa is an app to make a transaction
 type Mpesa struct {
-	client      HttpClient
-	environment Environment
-	mu          sync.Mutex
-	cache       cache
+	mu    sync.Mutex
+	cache cache
 
+	client         HttpClient
 	consumerKey    string
 	consumerSecret string
+	environment    Environment
 
 	authURL         string
-	stkPushURL      string
 	b2cURL          string
 	stkPushQueryURL string
+	stkPushURL      string
+	txnStatusURL    string
 }
 
 var (
@@ -82,21 +96,26 @@ func NewApp(c HttpClient, consumerKey, consumerSecret string, env Environment) *
 		}
 	}
 
-	baseUrl := sandboxBaseURL
-	if env == Production {
+	var baseUrl string
+	switch env {
+	case Production:
 		baseUrl = productionBaseURL
+	default:
+		baseUrl = sandboxBaseURL
 	}
 
 	return &Mpesa{
-		client:          c,
-		environment:     env,
-		cache:           make(cache),
-		consumerKey:     consumerKey,
-		consumerSecret:  consumerSecret,
+		cache:          make(cache),
+		client:         c,
+		consumerKey:    consumerKey,
+		consumerSecret: consumerSecret,
+		environment:    env,
+
 		authURL:         baseUrl + `/oauth/v1/generate?grant_type=client_credentials`,
-		stkPushURL:      baseUrl + `/mpesa/stkpush/v1/processrequest`,
 		b2cURL:          baseUrl + `/mpesa/b2c/v1/paymentrequest`,
 		stkPushQueryURL: baseUrl + `/mpesa/stkpushquery/v1/query`,
+		stkPushURL:      baseUrl + `/mpesa/stkpush/v1/processrequest`,
+		txnStatusURL:    baseUrl + `mpesa/transactionstatus/v1/query`,
 	}
 }
 
@@ -136,6 +155,39 @@ func (m *Mpesa) makeHttpRequestWithToken(
 	}
 
 	return res, nil
+}
+
+func (m *Mpesa) getSecurityCredentials(password string) (string, error) {
+	if password == "" {
+		return "", ErrInvalidInitiatorPassword
+	}
+
+	certPath := "certs/sandbox.cer"
+	if m.Environment().IsProduction() {
+		certPath = "certs/production.cer"
+	}
+
+	publicKey, err := certFS.ReadFile(certPath)
+	if err != nil {
+		return "", fmt.Errorf("mpesa: error opening cert %v - %v", certPath, err)
+	}
+
+	block, _ := pem.Decode(publicKey)
+
+	var cert *x509.Certificate
+	cert, err = x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return "", fmt.Errorf("mpesa: error parsing cert %v - %v", certPath, err)
+	}
+
+	rsaPublicKey := cert.PublicKey.(*rsa.PublicKey)
+	reader := rand.Reader
+	signature, err := rsa.EncryptPKCS1v15(reader, rsaPublicKey, []byte(password))
+	if err != nil {
+		return "", fmt.Errorf("mpesa: error encrypting password: %v", err)
+	}
+
+	return base64.StdEncoding.EncodeToString(signature), nil
 }
 
 // Environment returns the current environment the app is running on.
@@ -186,7 +238,7 @@ func (m *Mpesa) GenerateAccessToken(ctx context.Context) (string, error) {
 }
 
 // STKPush initiates online payment on behalf of a customer using STKPush.
-func (m *Mpesa) STKPush(ctx context.Context, passkey string, req STKPushRequest) (*STKPushRequestResponse, error) {
+func (m *Mpesa) STKPush(ctx context.Context, passkey string, req STKPushRequest) (*GenericRequestResponse, error) {
 	if passkey == "" {
 		return nil, ErrInvalidPasskey
 	}
@@ -201,7 +253,7 @@ func (m *Mpesa) STKPush(ctx context.Context, passkey string, req STKPushRequest)
 	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
-	var resp STKPushRequestResponse
+	var resp GenericRequestResponse
 	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
 		return nil, fmt.Errorf("mpesa: error decoding stk push request response - %v", err)
 	}
@@ -234,37 +286,17 @@ func UnmarshalSTKPushCallback(in interface{}) (*STKPushCallback, error) {
 }
 
 // B2C transacts between an M-Pesa short code to a phone number registered on M-Pesa
-func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*B2CRequestResponse, error) {
+func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*GenericRequestResponse, error) {
 	if initiatorPwd == "" {
 		return nil, ErrInvalidInitiatorPassword
 	}
 
-	certPath := "certs/sandbox.cer"
-	if m.Environment().IsProduction() {
-		certPath = "certs/production.cer"
-	}
-
-	publicKey, err := certFS.ReadFile(certPath)
+	securityCredential, err := m.getSecurityCredentials(initiatorPwd)
 	if err != nil {
-		return nil, fmt.Errorf("mpesa: error opening cert %v - %v", certPath, err)
+		return nil, err
 	}
 
-	block, _ := pem.Decode(publicKey)
-
-	var cert *x509.Certificate
-	cert, err = x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("mpesa: error parsing cert %v - %v", certPath, err)
-	}
-
-	rsaPublicKey := cert.PublicKey.(*rsa.PublicKey)
-	reader := rand.Reader
-	signature, err := rsa.EncryptPKCS1v15(reader, rsaPublicKey, []byte(initiatorPwd))
-	if err != nil {
-		return nil, fmt.Errorf("mpesa: error encrypting initiator password: %v", err)
-	}
-
-	req.SecurityCredential = base64.StdEncoding.EncodeToString(signature)
+	req.SecurityCredential = securityCredential
 
 	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.b2cURL, req, b2c)
 	if err != nil {
@@ -274,7 +306,7 @@ func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*
 	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
-	var resp B2CRequestResponse
+	var resp GenericRequestResponse
 	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
 		return nil, fmt.Errorf("mpesa: error decoding b2c request response - %v", err)
 	}
@@ -310,8 +342,8 @@ func UnmarshalB2CCallback(in interface{}) (*B2CCallback, error) {
 func (m *Mpesa) STKPushQuery(
 	ctx context.Context,
 	passkey string,
-	req STKPushQueryRequest,
-) (*STKPushQueryResponse, error) {
+	req STKQueryRequest,
+) (*GenericRequestResponse, error) {
 	if passkey == "" {
 		return nil, ErrInvalidPasskey
 	}
@@ -326,7 +358,7 @@ func (m *Mpesa) STKPushQuery(
 	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
-	var resp STKPushQueryResponse
+	var resp GenericRequestResponse
 	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
 		return nil, fmt.Errorf("mpesa: error decoding stk push query request response - %v", err)
 	}
