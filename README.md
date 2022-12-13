@@ -87,7 +87,7 @@ func main() {
     
     log.Printf("%+v", b2cRes)
 
-    stkQueryRes, err := mpesaApp.STKPushQuery(ctx, "PASSKEY_GOES_HERE", mpesa.STKPushQueryRequest{
+    stkQueryRes, err := mpesaApp.STKQuery(ctx, "PASSKEY_GOES_HERE", mpesa.STKQueryRequest{
         BusinessShortCode: 174379,
         CheckoutRequestID: "ws_CO_03082022131319635708374149", // STK PUSH CheckoutRequestID,
     })

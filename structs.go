@@ -59,36 +59,52 @@ type (
 		TransactionDesc string `json:"TransactionDesc"`
 	}
 
-	// STKPushRequestResponse is the response sent back by mpesa after initiating making STKPushRequest.
-	STKPushRequestResponse struct {
-		// MerchantRequestID is a global unique Identifier for any submitted payment request. Example: 16813-1590513-1
-		MerchantRequestID string `json:"MerchantRequestID,omitempty"`
-
+	// GeneralRequestResponse is the response sent back by mpesa after initiating a request.
+	GeneralRequestResponse struct {
 		// CheckoutRequestID is a global unique identifier of the processed checkout transaction request.
 		// Example: ws_CO_DMZ_12321_23423476
 		CheckoutRequestID string `json:"CheckoutRequestID,omitempty"`
 
-		// ResponseDescription is an acknowledgment message from the API that gives the status of the request submission.
-		// It usually maps to a specific ResponseCode value which can be a success message or an error description.
-		ResponseDescription string `json:"ResponseDescription,omitempty"`
-
-		// ResponseCode is a numeric status code that indicates the status of the transaction submission.
-		// 0 means successful submission and any other code means an error occurred.
-		ResponseCode string `json:"ResponseCode,omitempty"`
+		// ConversationID is a global unique identifier for the transaction request returned by the M-Pesa upon successful
+		// request submission.
+		ConversationID string `json:"ConversationID"`
 
 		// CustomerMessage is a message that your system can display to the Customer as an acknowledgement of the
 		// payment request submission. Example: Success. Request accepted for processing.
 		CustomerMessage string `json:"CustomerMessage,omitempty"`
 
-		// RequestID is a unique request ID for the payment request
-		RequestID string `json:"requestId,omitempty"`
-
 		// ErrorCode is a predefined code that indicates the reason for request failure that is defined in the
 		// ErrorMessage. The error codes maps to specific error message.
-		ErrorCode string `json:"errorCode,omitempty"`
+		ErrorCode string `json:"errorCode"`
 
 		// ErrorMessage is a short descriptive message of the failure reason.
-		ErrorMessage string `json:"errorMessage,omitempty"`
+		ErrorMessage string `json:"errorMessage"`
+
+		// MerchantRequestID is a global unique Identifier for any submitted payment request. Example: 16813-1590513-1
+		MerchantRequestID string `json:"MerchantRequestID,omitempty"`
+
+		// OriginatorConversationID is a global unique identifier for the transaction request returned by the API proxy
+		// upon successful request submission.
+		OriginatorConversationID string `json:"OriginatorConversationID"`
+
+		// ResponseCode is a numeric status code that indicates the status of the transaction submission.
+		// 0 means successful submission and any other code means an error occurred.
+		ResponseCode string `json:"ResponseCode,omitempty"`
+
+		// ResponseDescription is an acknowledgment message from the API that gives the status of the request submission.
+		// It usually maps to a specific ResponseCode value which can be a success message or an error description.
+		ResponseDescription string `json:"ResponseDescription,omitempty"`
+
+		// ResultCode is a numeric status code that indicates the status of the transaction processing.
+		// 0 means successful processing and any other code means an error occured or the transaction failed.
+		ResultCode string `json:"ResultCode"`
+
+		// ResultDesc description is a message from the API that gives the status of the request processing, usualy maps
+		// to a specific ResultCode value. It can be a success or an error description message.
+		ResultDesc string `json:"ResultDesc"`
+
+		// RequestID is a unique request ID for the payment request
+		RequestID string `json:"requestId"`
 	}
 
 	STKCallbackItem struct {
@@ -104,11 +120,11 @@ type (
 
 	STKCallback struct {
 		// MerchantRequestID is a global unique Identifier for any submitted payment request. It is the same
-		// value returned to the acknowledgement message on the STKPushRequestResponse.
+		// value returned to the acknowledgement message on the GeneralRequestResponse.
 		MerchantRequestID string `json:"MerchantRequestID"`
 
 		// CheckoutRequestID is a global unique identifier of the processed checkout transaction request.
-		// It is the same value returned to the acknowledgement message on the STKPushRequestResponse.
+		// It is the same value returned to the acknowledgement message on the GeneralRequestResponse.
 		CheckoutRequestID string `json:"CheckoutRequestID"`
 
 		// ResultCode is a numeric status code that indicates the status of the transaction processing.
@@ -201,33 +217,6 @@ type (
 		Occasion string `json:"Occasion"`
 	}
 
-	B2CRequestResponse struct {
-		// ConversationID is a global unique identifier for the transaction request returned by the M-Pesa upon successful
-		// request submission.
-		ConversationID string `json:"ConversationID"`
-
-		// OriginatorConversationID is a global unique identifier for the transaction request returned by the API proxy
-		// upon successful request submission.
-		OriginatorConversationID string `json:"OriginatorConversationID"`
-
-		// ResponseCode is a numeric status code that indicates the status of the transaction submission.
-		// 0 means successful submission and any other code means an error occurred.
-		ResponseCode string `json:"ResponseCode"`
-
-		// ResponseDescription is the status of the request.
-		ResponseDescription string `json:"ResponseDescription"`
-
-		// RequestID is a unique request ID for the payment request
-		RequestID string `json:"requestId"`
-
-		// ErrorCode is a predefined code that indicates the reason for request failure that is defined in the
-		// ErrorMessage. The error codes maps to specific error message.
-		ErrorCode string `json:"errorCode"`
-
-		// ErrorMessage is a short descriptive message of the failure reason.
-		ErrorMessage string `json:"errorMessage"`
-	}
-
 	// ResultParameter holds additional transaction details.
 	// Details available:
 	// 1:
@@ -286,7 +275,7 @@ type (
 		Result B2CCallbackResult `json:"Result"`
 	}
 
-	STKPushQueryRequest struct {
+	STKQueryRequest struct {
 		// BusinessShortCode is organizations shortcode (Paybill or Buy goods - A 5 to 7-digit account number) used to
 		// identify an organization and receive the transaction.
 		BusinessShortCode uint `json:"BusinessShortCode"`
@@ -302,39 +291,5 @@ type (
 		// Each part should be at least two digits apart from the year which takes four digits.
 		// Example 20060102150405
 		Timestamp string `json:"Timestamp"`
-	}
-
-	STKPushQueryResponse struct {
-		// CheckoutRequestID is a global unique identifier of the processed checkout transaction request.
-		CheckoutRequestID string `json:"CheckoutRequestID"`
-
-		// ErrorCode is a predefined code that indicates the reason for request failure that is defined in the
-		// ErrorMessage. The error codes maps to specific error message.
-		ErrorCode string `json:"errorCode,omitempty"`
-
-		// ErrorMessage is a short descriptive message of the failure reason.
-		ErrorMessage string `json:"errorMessage,omitempty"`
-
-		// MerchantRequestID is a global unique Identifier for any submited payment request.
-		MerchantRequestID string `json:"MerchantRequestID"`
-
-		// ResponseCode is a code that indicates the status of the transaction submission.
-		// 0 means successful submission and any other code means an error occured.
-		ResponseCode string `json:"ResponseCode"`
-
-		// ResponseDescription is an acknowledment message from the API that gives the status of the request submission
-		// usualy maps to a specific ResponseCode value. It can be a success submission message or an error description.
-		ResponseDescription string `json:"ResponseDescription"`
-
-		// ResultCode is a numeric status code that indicates the status of the transaction processing.
-		// 0 means successful processing and any other code means an error occured or the transaction failed.
-		ResultCode string `json:"ResultCode"`
-
-		// ResultDesc description is a message from the API that gives the status of the request processing, usualy maps
-		// to a specific ResultCode value. It can be a success or an error description message.
-		ResultDesc string `json:"ResultDesc"`
-
-		// RequestID is a unique request ID for the payment request
-		RequestID string `json:"requestId,omitempty"`
 	}
 )

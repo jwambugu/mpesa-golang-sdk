@@ -186,7 +186,7 @@ func (m *Mpesa) GenerateAccessToken(ctx context.Context) (string, error) {
 }
 
 // STKPush initiates online payment on behalf of a customer using STKPush.
-func (m *Mpesa) STKPush(ctx context.Context, passkey string, req STKPushRequest) (*STKPushRequestResponse, error) {
+func (m *Mpesa) STKPush(ctx context.Context, passkey string, req STKPushRequest) (*GeneralRequestResponse, error) {
 	if passkey == "" {
 		return nil, ErrInvalidPasskey
 	}
@@ -201,7 +201,7 @@ func (m *Mpesa) STKPush(ctx context.Context, passkey string, req STKPushRequest)
 	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
-	var resp STKPushRequestResponse
+	var resp GeneralRequestResponse
 	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
 		return nil, fmt.Errorf("mpesa: error decoding stk push request response - %v", err)
 	}
@@ -234,7 +234,7 @@ func UnmarshalSTKPushCallback(in interface{}) (*STKPushCallback, error) {
 }
 
 // B2C transacts between an M-Pesa short code to a phone number registered on M-Pesa
-func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*B2CRequestResponse, error) {
+func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*GeneralRequestResponse, error) {
 	if initiatorPwd == "" {
 		return nil, ErrInvalidInitiatorPassword
 	}
@@ -274,7 +274,7 @@ func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*
 	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
-	var resp B2CRequestResponse
+	var resp GeneralRequestResponse
 	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
 		return nil, fmt.Errorf("mpesa: error decoding b2c request response - %v", err)
 	}
@@ -306,12 +306,12 @@ func UnmarshalB2CCallback(in interface{}) (*B2CCallback, error) {
 	return &callback, nil
 }
 
-// STKPushQuery checks the status of an STKPush payment.
-func (m *Mpesa) STKPushQuery(
+// STKQuery checks the status of an STKPush payment.
+func (m *Mpesa) STKQuery(
 	ctx context.Context,
 	passkey string,
-	req STKPushQueryRequest,
-) (*STKPushQueryResponse, error) {
+	req STKQueryRequest,
+) (*GeneralRequestResponse, error) {
 	if passkey == "" {
 		return nil, ErrInvalidPasskey
 	}
@@ -326,7 +326,7 @@ func (m *Mpesa) STKPushQuery(
 	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
-	var resp STKPushQueryResponse
+	var resp GeneralRequestResponse
 	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
 		return nil, fmt.Errorf("mpesa: error decoding stk push query request response - %v", err)
 	}
