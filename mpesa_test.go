@@ -602,7 +602,7 @@ func TestMpesa_STKPushQuery(t *testing.T) {
 
 				res, err := app.STKPushQuery(ctx, passkey, stkReq)
 				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "error code 500.001.1001:The transaction is being processed")
+				assert.Contains(t, err.Error(), "error code 500.001.1001 - The transaction is being processed")
 				assert.Nil(t, res)
 			},
 		},
