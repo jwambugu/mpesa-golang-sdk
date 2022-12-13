@@ -251,7 +251,7 @@ type (
 
 		// ConversationID is a global unique identifier for the transaction request returned by the M-Pesa upon successful
 		// request submission.
-		ConversationID string `json:"ConversationID"`
+		ConversationID string `json:"ConversationID,omitempty"`
 
 		// CustomerMessage is a message that your system can display to the Customer as an acknowledgement of the
 		// payment request submission. Example: Success. Request accepted for processing.
@@ -265,11 +265,11 @@ type (
 		ErrorMessage string `json:"errorMessage,omitempty"`
 
 		// MerchantRequestID is a global unique Identifier for any submited payment request.
-		MerchantRequestID string `json:"MerchantRequestID"`
+		MerchantRequestID string `json:"MerchantRequestID,omitempty"`
 
 		// OriginatorConversationID is a global unique identifier for the transaction request returned by the API proxy
 		// upon successful request submission.
-		OriginatorConversationID string `json:"OriginatorConversationID"`
+		OriginatorConversationID string `json:"OriginatorConversationID,omitempty"`
 
 		// ResponseCode is a code that indicates the status of the transaction submission.
 		// 0 means successful submission and any other code means an error occured.
@@ -289,5 +289,37 @@ type (
 
 		// RequestID is a unique request ID for the payment request
 		RequestID string `json:"requestId,omitempty"`
+	}
+
+	TransactionStatusRequest struct {
+		// CommandID takes only 'TransactionStatusQuery' command id
+		CommandID CommandID `json:"CommandID"`
+
+		// IdentifierType is the type of organization receiving the transaction.
+		IdentifierType IdentifierType `json:"IdentifierType"`
+
+		// Initiator represent the name of the initiator initiating the request.
+		Initiator string `json:"Initiator"`
+
+		// Occasion is an optional parameter.
+		Occasion string `json:"Occasion"`
+
+		// PartyA represents the Organization/MSISDN receiving the transaction.
+		PartyA string `json:"PartyA"`
+
+		// QueueTimeOutURL is the URL that stores information of time out transaction.
+		QueueTimeOutURL string `json:"QueueTimeOutURL"`
+
+		// Remarks are comments that are sent along with the transaction.
+		Remarks string `json:"Remarks"`
+
+		// ResultURL is the callback URL for the transaction data.
+		ResultURL string `json:"ResultURL"`
+
+		// SecurityCredential is the ncrypted credential of user getting transaction amount.
+		SecurityCredential string `json:"SecurityCredential"`
+
+		// TransactionID is unique identifier to identify a transaction on M-Pesa.
+		TransactionID string `json:"TransactionID"`
 	}
 )

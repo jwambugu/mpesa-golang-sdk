@@ -27,6 +27,9 @@ type identifier string
 
 type IdentifierType uint8
 
+// CommandID identifies the command to execute.
+type CommandID string
+
 const (
 	Unknown Environment = iota
 	// Sandbox represents the test Environment
@@ -39,6 +42,7 @@ const (
 	stkPush      identifier = "stk push"
 	stkPushQuery identifier = "stk push query"
 	b2c          identifier = "b2c"
+	txnStatus    identifier = "txn status"
 )
 
 const (
@@ -46,6 +50,12 @@ const (
 	TillNumber IdentifierType = 2
 	ShortCode  IdentifierType = 4
 )
+
+const (
+	TransactionStatusQuery CommandID = "TransactionStatusQuery"
+)
+
+const SuccessResultCode = "0"
 
 var accessTokenTTL = 55 * time.Minute
 
@@ -115,7 +125,7 @@ func NewApp(c HttpClient, consumerKey, consumerSecret string, env Environment) *
 		b2cURL:          baseUrl + `/mpesa/b2c/v1/paymentrequest`,
 		stkPushQueryURL: baseUrl + `/mpesa/stkpushquery/v1/query`,
 		stkPushURL:      baseUrl + `/mpesa/stkpush/v1/processrequest`,
-		txnStatusURL:    baseUrl + `mpesa/transactionstatus/v1/query`,
+		txnStatusURL:    baseUrl + `/mpesa/transactionstatus/v1/query`,
 	}
 }
 
@@ -260,7 +270,7 @@ func (m *Mpesa) STKPush(ctx context.Context, passkey string, req STKPushRequest)
 
 	if resp.ErrorCode != "" {
 		return nil, fmt.Errorf(
-			"mpesa: stk push request ID %v failed with error code %v:%v",
+			"mpesa: stk push request ID %v failed with error code %v - %v",
 			resp.RequestID,
 			resp.ErrorCode,
 			resp.ErrorMessage,
@@ -313,7 +323,7 @@ func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*
 
 	if resp.ErrorCode != "" {
 		return nil, fmt.Errorf(
-			"mpesa: b2c request ID %v failed with error code %v:%v",
+			"mpesa: b2c request ID %v failed with error code %v - %v",
 			resp.RequestID,
 			resp.ErrorCode,
 			resp.ErrorMessage,
@@ -365,7 +375,54 @@ func (m *Mpesa) STKPushQuery(
 
 	if resp.ErrorCode != "" {
 		return nil, fmt.Errorf(
-			"mpesa: stk push query request ID %v failed with error code %v:%v",
+			"mpesa: stk push query request ID %v failed with error code %v - %v",
+			resp.RequestID,
+			resp.ErrorCode,
+			resp.ErrorMessage,
+		)
+	}
+
+	return &resp, nil
+}
+
+func (m *Mpesa) GetTxnStatus(
+	ctx context.Context,
+	initiatorPwd string,
+	req TransactionStatusRequest,
+) (*GenericRequestResponse, error) {
+	if initiatorPwd == "" {
+		return nil, ErrInvalidInitiatorPassword
+	}
+
+	securityCredential, err := m.getSecurityCredentials(initiatorPwd)
+	if err != nil {
+		return nil, err
+	}
+
+	req.SecurityCredential = securityCredential
+
+	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.txnStatusURL, req, txnStatus)
+	if err != nil {
+		return nil, err
+	}
+
+	//goland:noinspection GoUnhandledErrorResult
+	defer res.Body.Close()
+
+	var resp GenericRequestResponse
+	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
+		return nil, fmt.Errorf("mpesa: error decoding txn status request response - %v", err)
+	}
+
+	if resp.ResponseCode != SuccessResultCode {
+		return nil, fmt.Errorf(
+			"mpesa: txn status failed with response code %v - %v", resp.ResponseCode, resp.ResponseDescription,
+		)
+	}
+
+	if resp.ErrorCode != "" {
+		return nil, fmt.Errorf(
+			"mpesa: txn status request ID %v failed with error code %v - %v",
 			resp.RequestID,
 			resp.ErrorCode,
 			resp.ErrorMessage,
