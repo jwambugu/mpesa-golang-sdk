@@ -35,7 +35,7 @@ const (
 	b2c          identifier = "b2c"
 	c2b          identifier = "c2b"
 
-	ResponseTypeComplete string = "Complete"
+	ResponseTypeComplete string = "Completed"
 	ResponseTypeCanceled string = "Canceled"
 )
 
