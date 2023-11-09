@@ -12,6 +12,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"sync"
 	"time"
@@ -32,6 +33,10 @@ const (
 	stkPush      identifier = "stk push"
 	stkPushQuery identifier = "stk push query"
 	b2c          identifier = "b2c"
+	c2b          identifier = "c2b"
+
+	responseTypeComplete string = "Complete"
+	responseTypeCanceled string = "Canceled"
 )
 
 var accessTokenTTL = 55 * time.Minute
@@ -62,6 +67,7 @@ type Mpesa struct {
 	stkPushURL      string
 	b2cURL          string
 	stkPushQueryURL string
+	c2bURL          string
 }
 
 var (
@@ -97,6 +103,7 @@ func NewApp(c HttpClient, consumerKey, consumerSecret string, env Environment) *
 		stkPushURL:      baseUrl + `/mpesa/stkpush/v1/processrequest`,
 		b2cURL:          baseUrl + `/mpesa/b2c/v1/paymentrequest`,
 		stkPushQueryURL: baseUrl + `/mpesa/stkpushquery/v1/query`,
+		c2bURL:          baseUrl + `/mpesa/c2b/v1/registerurl`,
 	}
 }
 
@@ -341,4 +348,33 @@ func (m *Mpesa) STKQuery(
 	}
 
 	return &resp, nil
+}
+
+// RegisterC2BURL API works hand in hand with Customer to Business (C2B) APIs and allows receiving payment notifications to your paybill.
+// This API enables you to register the callback URLs via which you shall receive notifications for payments to your pay bill/till number.
+// There are two URLs required for Register URL API: Validation URL and Confirmation URL.
+// Validation URL: This is the URL that is only used when a Merchant (Partner) requires to validate the details of the payment before accepting.
+// For example, a bank would want to verify if an account number exists in their platform before accepting a payment from the customer.
+// Confirmation URL:  This is the URL that receives payment notification once payment has been completed successfully on M-PESA.
+func (m *Mpesa) RegisterC2BURL(ctx context.Context, req RegisterC2BURLRequest) (*RegisterC2BURLResponse, error) {
+	switch req.ResponseType {
+	case responseTypeComplete, responseTypeCanceled:
+		response, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.c2bURL, req, c2b)
+		if err != nil {
+			return nil, errors.Join(errors.New("mpesa: c2b url validation failed"), err)
+		}
+		defer func(body io.ReadCloser) {
+			_ = body.Close()
+		}(response.Body)
+
+		var result RegisterC2BURLResponse
+		err = json.NewDecoder(response.Body).Decode(&result)
+		if err != nil {
+			return nil, errors.Join(errors.New("mpesa: could not unmarshall c2b response body"), err)
+		}
+
+		return &result, nil
+	default:
+		return nil, fmt.Errorf("mpesa: the provided ResponseType [%s] is not valid.", req.ResponseType)
+	}
 }

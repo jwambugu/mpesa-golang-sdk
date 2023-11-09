@@ -5,10 +5,11 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 const (
@@ -647,6 +648,119 @@ func TestMpesa_STKPushQuery(t *testing.T) {
 				BusinessShortCode: 174379,
 				CheckoutRequestID: "ws_CO_03082022131319635708374149",
 			})
+		})
+	}
+}
+
+func Test_RegisterC2BURL(t *testing.T) {
+	asserts := assert.New(t)
+	tests := []struct {
+		name       string
+		env        Environment
+		mock       func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, c2bRequest RegisterC2BURLRequest)
+		c2bRequest RegisterC2BURLRequest
+	}{
+		{
+			name: "it should register URLs in sanbox",
+			env:  Sandbox,
+			c2bRequest: RegisterC2BURLRequest{
+				ShortCode:       600638,
+				ResponseType:    "Complete",
+				ValidationURL:   "http://example.com/validate",
+				ConfirmationURL: "http://example.com/confirm",
+			},
+			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, c2bRequest RegisterC2BURLRequest) {
+				c.MockRequest(app.c2bURL, func() (status int, body string) {
+					req := c.requests[1]
+
+					asserts.Equal("application/json", req.Header.Get("Content-Type"))
+					wantAuthorizationHeader := `Bearer ` + app.cache[testConsumerKey].AccessToken
+					asserts.Equal(wantAuthorizationHeader, req.Header.Get("Authorization"))
+
+					var reqParams RegisterC2BURLRequest
+					//log.Println(fmt.Sprint(req.Body))
+					err := json.NewDecoder(req.Body).Decode(&reqParams)
+					asserts.NoError(err)
+
+					return http.StatusOK, `
+						{
+						  "OriginatorCoversationID": "7619-37765134-1",
+						  "ResponseCode": "0",
+						  "ResponseDescription": "success"
+						}`
+				})
+
+				res, err := app.RegisterC2BURL(ctx, c2bRequest)
+				asserts.NoError(err)
+				asserts.NotNil(res)
+				asserts.Equal(res.ResponseDescription, "success")
+			},
+		},
+		{
+			name: "it should register URLs in production",
+			env:  Production,
+			c2bRequest: RegisterC2BURLRequest{
+				ShortCode:       200200,
+				ResponseType:    "Canceled",
+				ValidationURL:   "http://example.com/validate",
+				ConfirmationURL: "http://example.com/confirm",
+			},
+			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, c2bRequest RegisterC2BURLRequest) {
+				c.MockRequest(app.c2bURL, func() (status int, body string) {
+					req := c.requests[1]
+
+					asserts.Equal("application/json", req.Header.Get("Content-Type"))
+					wantAuthorizationHeader := `Bearer ` + app.cache[testConsumerKey].AccessToken
+					asserts.Equal(wantAuthorizationHeader, req.Header.Get("Authorization"))
+
+					var reqParams RegisterC2BURLRequest
+					//log.Println(fmt.Sprint(req.Body))
+					err := json.NewDecoder(req.Body).Decode(&reqParams)
+					asserts.NoError(err)
+
+					return http.StatusOK, `
+						{
+						  "OriginatorCoversationID": "7619-37765134-1",
+						  "ResponseCode": "0",
+						  "ResponseDescription": "success"
+						}`
+				})
+
+				res, err := app.RegisterC2BURL(ctx, c2bRequest)
+				asserts.NoError(err)
+				asserts.NotNil(res)
+				asserts.Equal(res.ResponseDescription, "success")
+			},
+		},
+		{
+			name: "fail with invalid response type",
+			c2bRequest: RegisterC2BURLRequest{
+				ResponseType: "Foo",
+			},
+			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, c2bRequest RegisterC2BURLRequest) {
+				res, err := app.RegisterC2BURL(ctx, c2bRequest)
+				asserts.Error(err)
+				asserts.Equal(err.Error(), "mpesa: the provided ResponseType [Foo] is not valid.")
+				asserts.Nil(res)
+			},
+		},
+	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			client := newMockHttpClient()
+			app := NewApp(client, testConsumerKey, testConsumerSecret, tc.env)
+
+			client.MockRequest(app.authURL, func() (status int, body string) {
+				return http.StatusOK, `
+				{
+					"access_token": "0A0v8OgxqqoocblflR58m9chMdnU",
+					"expires_in": "3599"
+				}`
+			})
+			ctx := context.Background()
+			tc.mock(t, ctx, app, client, tc.c2bRequest)
 		})
 	}
 }
