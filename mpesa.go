@@ -35,8 +35,8 @@ const (
 	b2c          identifier = "b2c"
 	c2b          identifier = "c2b"
 
-	responseTypeComplete string = "Complete"
-	responseTypeCanceled string = "Canceled"
+	ResponseTypeComplete string = "Complete"
+	ResponseTypeCanceled string = "Canceled"
 )
 
 var accessTokenTTL = 55 * time.Minute
@@ -358,7 +358,7 @@ func (m *Mpesa) STKQuery(
 // Confirmation URL:  This is the URL that receives payment notification once payment has been completed successfully on M-PESA.
 func (m *Mpesa) RegisterC2BURL(ctx context.Context, req RegisterC2BURLRequest) (*RegisterC2BURLResponse, error) {
 	switch req.ResponseType {
-	case responseTypeComplete, responseTypeCanceled:
+	case ResponseTypeComplete, ResponseTypeCanceled:
 		response, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.c2bURL, req, c2b)
 		if err != nil {
 			return nil, errors.Join(errors.New("mpesa: c2b url validation failed"), err)
