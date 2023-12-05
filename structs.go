@@ -292,4 +292,38 @@ type (
 		// Example 20060102150405
 		Timestamp string `json:"Timestamp"`
 	}
+
+	RegisterC2BURLRequest struct {
+		// ShortCode is usually, a unique number is tagged to an M-PESA pay bill/till number of the organization.
+		ShortCode uint `json:"ShortCode"`
+
+		// ResponseType This parameter specifies what is to happen if for any reason the validation URL is not reachable.
+		// Note that, this is the default action value that determines what M-PESA will do in the scenario that
+		//your endpoint is unreachable or is unable to respond on time. Only two values are allowed: Completed or Cancelled.
+		// Completed means M-PESA will automatically complete your transaction, whereas Cancelled means M-PESA will
+		// automatically cancel the transaction, in the event M-PESA is unable to reach your Validation URL.
+		ResponseType string `json:"ResponseType"`
+
+		// ConfirmationURL is the URL that receives the confirmation request from API upon payment completion.
+		ConfirmationURL string `json:"ConfirmationURL"`
+
+		// ValidationURL is the URL that receives the validation request from the API upon payment submission.
+		// The validation URL is only called if the external validation on the registered shortcode is enabled.
+		// (By default External Validation is disabled).
+		ValidationURL string `json:"ValidationURL"`
+	}
+
+	RegisterC2BURLResponse struct {
+		// OriginatorConversationID is a global unique identifier for the transaction request returned by the API proxy
+		// upon successful request submission.
+		OriginatorConversationID string `json:"OriginatorConversationID"`
+
+		// ResponseCode is a numeric status code that indicates the status of the transaction submission.
+		// 0 means successful submission and any other code means an error occurred.
+		ResponseCode string `json:"ResponseCode"`
+
+		// ResponseDescription is an acknowledgment message from the API that gives the status of the request submission.
+		// It usually maps to a specific ResponseCode value which can be a success message or an error description.
+		ResponseDescription string `json:"ResponseDescription"`
+	}
 )
