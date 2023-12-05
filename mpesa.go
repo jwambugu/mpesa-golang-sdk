@@ -375,6 +375,6 @@ func (m *Mpesa) RegisterC2BURL(ctx context.Context, req RegisterC2BURLRequest) (
 
 		return &result, nil
 	default:
-		return nil, fmt.Errorf("mpesa: the provided ResponseType [%s] is not valid.", req.ResponseType)
+		return nil, fmt.Errorf("mpesa: the provided ResponseType [%s] is not valid", req.ResponseType)
 	}
 }

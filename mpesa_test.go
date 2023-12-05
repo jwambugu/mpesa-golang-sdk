@@ -665,7 +665,7 @@ func Test_RegisterC2BURL(t *testing.T) {
 			env:  Sandbox,
 			c2bRequest: RegisterC2BURLRequest{
 				ShortCode:       600638,
-				ResponseType:    "Complete",
+				ResponseType:    "Completed",
 				ValidationURL:   "http://example.com/validate",
 				ConfirmationURL: "http://example.com/confirm",
 			},
@@ -678,7 +678,6 @@ func Test_RegisterC2BURL(t *testing.T) {
 					asserts.Equal(wantAuthorizationHeader, req.Header.Get("Authorization"))
 
 					var reqParams RegisterC2BURLRequest
-					//log.Println(fmt.Sprint(req.Body))
 					err := json.NewDecoder(req.Body).Decode(&reqParams)
 					asserts.NoError(err)
 
@@ -714,7 +713,6 @@ func Test_RegisterC2BURL(t *testing.T) {
 					asserts.Equal(wantAuthorizationHeader, req.Header.Get("Authorization"))
 
 					var reqParams RegisterC2BURLRequest
-					//log.Println(fmt.Sprint(req.Body))
 					err := json.NewDecoder(req.Body).Decode(&reqParams)
 					asserts.NoError(err)
 
@@ -740,7 +738,7 @@ func Test_RegisterC2BURL(t *testing.T) {
 			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, c2bRequest RegisterC2BURLRequest) {
 				res, err := app.RegisterC2BURL(ctx, c2bRequest)
 				asserts.Error(err)
-				asserts.Equal(err.Error(), "mpesa: the provided ResponseType [Foo] is not valid.")
+				asserts.Equal(err.Error(), "mpesa: the provided ResponseType [Foo] is not valid")
 				asserts.Nil(res)
 			},
 		},
