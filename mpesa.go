@@ -24,16 +24,9 @@ type Environment uint8
 // cache stores the AuthorizationResponse for the specified accessTokenTTL
 type cache map[string]AuthorizationResponse
 
-type identifier string
-
 const (
 	Sandbox Environment = iota
 	Production
-
-	stkPush      identifier = "stk push"
-	stkPushQuery identifier = "stk push query"
-	b2c          identifier = "b2c"
-	c2b          identifier = "c2b"
 
 	ResponseTypeComplete string = "Completed"
 	ResponseTypeCanceled string = "Canceled"
@@ -113,20 +106,15 @@ func generateTimestampAndPassword(shortcode uint, passkey string) (string, strin
 	return timestamp, base64.StdEncoding.EncodeToString([]byte(password))
 }
 
-func (m *Mpesa) makeHttpRequestWithToken(
-	ctx context.Context,
-	method, url string,
-	body interface{},
-	identifier identifier,
-) (*http.Response, error) {
+func (m *Mpesa) makeHttpRequestWithToken(ctx context.Context, method, url string, body interface{}) (*http.Response, error) {
 	reqBody, err := json.Marshal(body)
 	if err != nil {
-		return nil, fmt.Errorf("mpesa: error marshling %v request payload - %v", identifier, err)
+		return nil, fmt.Errorf("mpesa: error marshling request payload - %v", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewBuffer(reqBody))
 	if err != nil {
-		return nil, fmt.Errorf("mpesa: error creating %v request - %v", identifier, err)
+		return nil, fmt.Errorf("mpesa: error creating request - %v", err)
 	}
 
 	accessToken, err := m.GenerateAccessToken(ctx)
@@ -139,7 +127,7 @@ func (m *Mpesa) makeHttpRequestWithToken(
 
 	res, err := m.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("mpesa: error making %v request - %v", identifier, err)
+		return nil, fmt.Errorf("mpesa: error making request - %v", err)
 	}
 
 	return res, nil
@@ -200,7 +188,7 @@ func (m *Mpesa) STKPush(ctx context.Context, passkey string, req STKPushRequest)
 
 	req.Timestamp, req.Password = generateTimestampAndPassword(req.BusinessShortCode, passkey)
 
-	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.stkPushURL, req, stkPush)
+	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.stkPushURL, req)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +261,7 @@ func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*
 
 	req.SecurityCredential = base64.StdEncoding.EncodeToString(signature)
 
-	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.b2cURL, req, b2c)
+	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.b2cURL, req)
 	if err != nil {
 		return nil, err
 	}
@@ -314,18 +302,14 @@ func UnmarshalB2CCallback(in interface{}) (*B2CCallback, error) {
 }
 
 // STKQuery checks the status of an STKPush payment.
-func (m *Mpesa) STKQuery(
-	ctx context.Context,
-	passkey string,
-	req STKQueryRequest,
-) (*GeneralRequestResponse, error) {
+func (m *Mpesa) STKQuery(ctx context.Context, passkey string, req STKQueryRequest) (*GeneralRequestResponse, error) {
 	if passkey == "" {
 		return nil, ErrInvalidPasskey
 	}
 
 	req.Timestamp, req.Password = generateTimestampAndPassword(req.BusinessShortCode, passkey)
 
-	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.stkPushQueryURL, req, stkPushQuery)
+	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.stkPushQueryURL, req)
 	if err != nil {
 		return nil, err
 	}
@@ -359,7 +343,7 @@ func (m *Mpesa) STKQuery(
 func (m *Mpesa) RegisterC2BURL(ctx context.Context, req RegisterC2BURLRequest) (*RegisterC2BURLResponse, error) {
 	switch req.ResponseType {
 	case ResponseTypeComplete, ResponseTypeCanceled:
-		response, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.c2bURL, req, c2b)
+		response, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.c2bURL, req)
 		if err != nil {
 			return nil, errors.Join(errors.New("mpesa: c2b url validation failed"), err)
 		}
