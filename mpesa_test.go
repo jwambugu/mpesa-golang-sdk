@@ -18,15 +18,18 @@ const (
 )
 
 func TestMpesa_GenerateAccessToken(t *testing.T) {
-	asserts := assert.New(t)
+	var (
+		asserts = assert.New(t)
+		ctx     = context.Background()
+	)
 
 	tests := []struct {
 		name string
-		mock func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient)
+		mock func(t *testing.T, app *Mpesa, c *mockHttpClient)
 	}{
 		{
 			name: "it generates and caches an access token successfully",
-			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient) {
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient) {
 				c.MockRequest(app.authURL, func() (status int, body string) {
 					return http.StatusOK, `
 						{
@@ -48,7 +51,7 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 		},
 		{
 			name: "it fails to generate an access token",
-			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient) {
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient) {
 				c.MockRequest(app.authURL, func() (status int, body string) {
 					return http.StatusBadRequest, ``
 				})
@@ -60,7 +63,7 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 		},
 		{
 			name: "it flushes and generates a new access token successfully",
-			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient) {
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient) {
 				oldToken := "0A0v8OgxqqoocblflR58m9chMdnU"
 
 				c.MockRequest(app.authURL, func() (status int, body string) {
@@ -99,7 +102,7 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 		},
 		{
 			name: "it fails with 404 if invalid url is passed",
-			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient) {
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient) {
 				c.MockRequest(app.stkPushURL, func() (status int, body string) {
 					return http.StatusNotFound, ``
 				})
@@ -116,22 +119,26 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			cl := newMockHttpClient()
-			app := NewApp(cl, testConsumerKey, testConsumerSecret, Sandbox)
+			var (
+				cl  = newMockHttpClient()
+				app = NewApp(cl, testConsumerKey, testConsumerSecret, Sandbox)
+			)
 
-			ctx := context.Background()
-			tc.mock(t, ctx, app, cl)
+			tc.mock(t, app, cl)
 		})
 	}
 }
 
 func TestMpesa_STKPush(t *testing.T) {
-	asserts := assert.New(t)
+	var (
+		asserts = assert.New(t)
+		ctx     = context.Background()
+	)
 
 	tests := []struct {
 		name   string
 		stkReq STKPushRequest
-		mock   func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, stkReq STKPushRequest)
+		mock   func(t *testing.T, app *Mpesa, c *mockHttpClient, stkReq STKPushRequest)
 	}{
 		{
 			name: "it makes stk push request successfully",
@@ -146,7 +153,7 @@ func TestMpesa_STKPush(t *testing.T) {
 				AccountReference:  "Test",
 				TransactionDesc:   "Test",
 			},
-			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, stkReq STKPushRequest) {
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, stkReq STKPushRequest) {
 				passkey := "passkey"
 
 				c.MockRequest(app.stkPushURL, func() (status int, body string) {
@@ -197,7 +204,7 @@ func TestMpesa_STKPush(t *testing.T) {
 				AccountReference:  "Test",
 				TransactionDesc:   "Test",
 			},
-			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, stkReq STKPushRequest) {
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, stkReq STKPushRequest) {
 				passkey := "passkey"
 
 				c.MockRequest(app.stkPushURL, func() (status int, body string) {
@@ -221,8 +228,10 @@ func TestMpesa_STKPush(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			cl := newMockHttpClient()
-			app := NewApp(cl, testConsumerKey, testConsumerSecret, Sandbox)
+			var (
+				cl  = newMockHttpClient()
+				app = NewApp(cl, testConsumerKey, testConsumerSecret, Sandbox)
+			)
 
 			cl.MockRequest(app.authURL, func() (status int, body string) {
 				return http.StatusOK, `
@@ -232,8 +241,7 @@ func TestMpesa_STKPush(t *testing.T) {
 				}`
 			})
 
-			ctx := context.Background()
-			tc.mock(t, ctx, app, cl, tc.stkReq)
+			tc.mock(t, app, cl, tc.stkReq)
 
 			_, err := app.GenerateAccessToken(ctx)
 			asserts.NoError(err)
@@ -243,7 +251,9 @@ func TestMpesa_STKPush(t *testing.T) {
 }
 
 func TestUnmarshalSTKPushCallback(t *testing.T) {
-	asserts := assert.New(t)
+	var (
+		asserts = assert.New(t)
+	)
 
 	tests := []struct {
 		name  string
@@ -311,13 +321,16 @@ func TestUnmarshalSTKPushCallback(t *testing.T) {
 }
 
 func TestMpesa_B2C(t *testing.T) {
-	asserts := assert.New(t)
+	var (
+		asserts = assert.New(t)
+		ctx     = context.Background()
+	)
 
 	tests := []struct {
 		name   string
 		b2cReq B2CRequest
 		env    Environment
-		mock   func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, b2cReq B2CRequest)
+		mock   func(t *testing.T, app *Mpesa, c *mockHttpClient, b2cReq B2CRequest)
 	}{
 		{
 			name: "it makes a b2c request on sandbox successfully",
@@ -333,7 +346,7 @@ func TestMpesa_B2C(t *testing.T) {
 				Occasion:        "Test Occasion",
 			},
 			env: Sandbox,
-			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, b2cReq B2CRequest) {
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, b2cReq B2CRequest) {
 				c.MockRequest(app.b2cURL, func() (status int, body string) {
 					req := c.requests[1]
 
@@ -376,7 +389,7 @@ func TestMpesa_B2C(t *testing.T) {
 				Occasion:        "Test Occasion",
 			},
 			env: Production,
-			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, b2cReq B2CRequest) {
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, b2cReq B2CRequest) {
 				c.MockRequest(app.b2cURL, func() (status int, body string) {
 					req := c.requests[1]
 
@@ -414,7 +427,7 @@ func TestMpesa_B2C(t *testing.T) {
 				Occasion:        "Test Occasion",
 			},
 			env: Production,
-			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, b2cReq B2CRequest) {
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, b2cReq B2CRequest) {
 				c.MockRequest(app.b2cURL, func() (status int, body string) {
 					return http.StatusBadRequest, `
 					{    
@@ -437,8 +450,10 @@ func TestMpesa_B2C(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			cl := newMockHttpClient()
-			app := NewApp(cl, testConsumerKey, testConsumerSecret, tc.env)
+			var (
+				cl  = newMockHttpClient()
+				app = NewApp(cl, testConsumerKey, testConsumerSecret, tc.env)
+			)
 
 			cl.MockRequest(app.authURL, func() (status int, body string) {
 				return http.StatusOK, `
@@ -448,8 +463,7 @@ func TestMpesa_B2C(t *testing.T) {
 				}`
 			})
 
-			ctx := context.Background()
-			tc.mock(t, ctx, app, cl, tc.b2cReq)
+			tc.mock(t, app, cl, tc.b2cReq)
 
 			_, err := app.GenerateAccessToken(ctx)
 			asserts.NoError(err)
@@ -555,15 +569,18 @@ func TestUnmarshalB2CCallback(t *testing.T) {
 }
 
 func TestMpesa_STKPushQuery(t *testing.T) {
-	asserts := assert.New(t)
+	var (
+		asserts = assert.New(t)
+		ctx     = context.Background()
+	)
 
 	tests := []struct {
 		name string
-		mock func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, stkReq STKQueryRequest)
+		mock func(t *testing.T, app *Mpesa, c *mockHttpClient, stkReq STKQueryRequest)
 	}{
 		{
 			name: "it makes an stk push query request successfully",
-			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, stkReq STKQueryRequest) {
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, stkReq STKQueryRequest) {
 				passkey := "passkey"
 
 				c.MockRequest(app.stkPushQueryURL, func() (status int, body string) {
@@ -604,7 +621,7 @@ func TestMpesa_STKPushQuery(t *testing.T) {
 		},
 		{
 			name: "the request fails if the transaction is being processed",
-			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, stkReq STKQueryRequest) {
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, stkReq STKQueryRequest) {
 				passkey := "passkey"
 
 				c.MockRequest(app.stkPushQueryURL, func() (status int, body string) {
@@ -643,8 +660,7 @@ func TestMpesa_STKPushQuery(t *testing.T) {
 			_, err := app.GenerateAccessToken(context.Background())
 			asserts.NoError(err)
 
-			ctx := context.Background()
-			tc.mock(t, ctx, app, cl, STKQueryRequest{
+			tc.mock(t, app, cl, STKQueryRequest{
 				BusinessShortCode: 174379,
 				CheckoutRequestID: "ws_CO_03082022131319635708374149",
 			})
@@ -653,7 +669,11 @@ func TestMpesa_STKPushQuery(t *testing.T) {
 }
 
 func Test_RegisterC2BURL(t *testing.T) {
-	asserts := assert.New(t)
+	var (
+		asserts = assert.New(t)
+		ctx     = context.Background()
+	)
+
 	tests := []struct {
 		name       string
 		env        Environment
@@ -747,8 +767,11 @@ func Test_RegisterC2BURL(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			client := newMockHttpClient()
-			app := NewApp(client, testConsumerKey, testConsumerSecret, tc.env)
+
+			var (
+				client = newMockHttpClient()
+				app    = NewApp(client, testConsumerKey, testConsumerSecret, tc.env)
+			)
 
 			client.MockRequest(app.authURL, func() (status int, body string) {
 				return http.StatusOK, `
@@ -757,7 +780,7 @@ func Test_RegisterC2BURL(t *testing.T) {
 					"expires_in": "3599"
 				}`
 			})
-			ctx := context.Background()
+
 			tc.mock(t, ctx, app, client, tc.c2bRequest)
 		})
 	}
