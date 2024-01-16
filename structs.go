@@ -2,6 +2,18 @@ package mpesa
 
 import "time"
 
+// DynamicQRTransactionType represents the supported transaction types for the Dynamic QR API
+type DynamicQRTransactionType string
+
+const (
+	PayMerchantBuyGoods      DynamicQRTransactionType = "BG"
+	WithdrawCashAtAgentTill  DynamicQRTransactionType = "WA"
+	PaybillOrBusinessNumber  DynamicQRTransactionType = "PB"
+	SendMoneyViaMobileNumber DynamicQRTransactionType = "SM"
+	// SentToBusiness - Use Business number CPI in MSISDN format.
+	SentToBusiness DynamicQRTransactionType = "SB"
+)
+
 type (
 	// AuthorizationResponse is returned when trying to authenticate the app using provided credentials
 	AuthorizationResponse struct {
@@ -40,10 +52,10 @@ type (
 
 		// PartyB is the organization receiving the funds. The parameter expected is a 5 to 7 digit as defined on
 		// the Shortcode description which can also be the same as BusinessShortCode value.
-		PartyB uint `json:"PartyB,omitempty"`
+		PartyB uint `json:"PartyB"`
 
 		// PhoneNumber to receive the STK Pin Prompt which can be same as PartyA value.
-		PhoneNumber uint64 `json:"PhoneNumber,omitempty"`
+		PhoneNumber uint64 `json:"PhoneNumber"`
 
 		// CallbackURL is a valid secure URL that is used to receive notifications from M-Pesa API. It is the endpoint
 		// to which the results will be sent by M-Pesa API.
@@ -324,6 +336,54 @@ type (
 
 		// ResponseDescription is an acknowledgment message from the API that gives the status of the request submission.
 		// It usually maps to a specific ResponseCode value which can be a success message or an error description.
+		ResponseDescription string `json:"ResponseDescription"`
+	}
+
+	DynamicQRRequest struct {
+		// Total Amount for the sale or transaction
+		Amount uint `json:"Amount"`
+
+		// CreditPartyIdentifier can be a Mobile Number, Business Number, Agent Till, Paybill or Business number, or Merchant Buy Goods.
+		CreditPartyIdentifier string `json:"CPI"`
+
+		// MerchantName is the name of the Company/M-Pesa merchant
+		MerchantName string `json:"MerchantName"`
+
+		// ReferenceNo is the transaction reference number.
+		ReferenceNo string `json:"RefNo"`
+
+		// Size of the QR code image in pixels. QR code image will always be a square image.
+		Size string `json:"Size"`
+
+		/*
+			TransactionType represents the type of transaction being made.
+				BG: Pay Merchant (Buy Goods).
+				WA: Withdraw Cash at Agent Till.
+				PB: Paybill or Business number.
+				SM: Send Money(Mobile number)
+				SB: Sent to Business. Business number CPI in MSISDN format.
+		*/
+		TransactionType DynamicQRTransactionType `json:"TrxCode"`
+	}
+
+	DynamicQRResponse struct {
+		// ErrorCode is a predefined code that indicates the reason for request failure that is defined in the
+		// ErrorMessage. The error codes maps to specific error message.
+		ErrorCode string `json:"errorCode,omitempty"`
+
+		// ErrorMessage is a short descriptive message of the failure reason.
+		ErrorMessage string `json:"errorMessage,omitempty"`
+
+		// QRCode Image/Data/String.
+		QRCode string `json:"QRCode"`
+
+		// RequestID represents the ID for the request
+		RequestID string `json:"requestId,omitempty"`
+
+		// ResponseCode is a numeric status code that indicates the status of the transaction submission.
+		ResponseCode string `json:"ResponseCode"`
+
+		// ResponseDescription is a response describing the status of the transaction.
 		ResponseDescription string `json:"ResponseDescription"`
 	}
 )
