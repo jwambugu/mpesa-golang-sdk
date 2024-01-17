@@ -367,6 +367,9 @@ type (
 	}
 
 	DynamicQRResponse struct {
+		// ImagePath is the absolute path to the decoded base64 image
+		ImagePath string `json:"qr_path,omitempty"`
+
 		// ErrorCode is a predefined code that indicates the reason for request failure that is defined in the
 		// ErrorMessage. The error codes maps to specific error message.
 		ErrorCode string `json:"errorCode,omitempty"`

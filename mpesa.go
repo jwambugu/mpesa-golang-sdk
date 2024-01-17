@@ -12,8 +12,13 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"image/png"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -367,8 +372,11 @@ func (m *Mpesa) RegisterC2BURL(ctx context.Context, req RegisterC2BURLRequest) (
 
 // DynamicQR API is used to generate a Dynamic QR which enables Safaricom M-PESA customers who have My Safaricom App or
 // M-PESA app, to scan a QR (Quick Response) code, to capture till number and amount then authorize to pay for goods and
-// services at select LIPA NA M-PESA (LNM) merchant outlets.
-func (m *Mpesa) DynamicQR(ctx context.Context, req DynamicQRRequest, transactionType DynamicQRTransactionType) (*DynamicQRResponse, error) {
+// services at select LIPA NA M-PESA (LNM) merchant outlets. If the decodeImage parameter is set to true, the QR code
+// will be decoded and a base url is set on the ImagePath field
+func (m *Mpesa) DynamicQR(
+	ctx context.Context, req DynamicQRRequest, transactionType DynamicQRTransactionType, decodeImage bool,
+) (*DynamicQRResponse, error) {
 	req.TransactionType = transactionType
 
 	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.dynamicQRURL, req)
@@ -390,5 +398,43 @@ func (m *Mpesa) DynamicQR(ctx context.Context, req DynamicQRRequest, transaction
 		)
 	}
 
+	if !decodeImage {
+		return resp, nil
+	}
+
+	reader := base64.NewDecoder(base64.StdEncoding, strings.NewReader(resp.QRCode))
+
+	image, err := png.Decode(reader)
+	if err != nil {
+		return nil, fmt.Errorf("mpesa: failed to decode png: %v", err)
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("mpesa: failed to get working dir: %v", err)
+	}
+
+	imagesDir := filepath.Join(wd, "storage", "images")
+	if _, err := os.Stat(imagesDir); os.IsNotExist(err) {
+		if err = os.Mkdir(imagesDir, os.ModePerm); err != nil {
+			return nil, fmt.Errorf("mpesa: failed to create images dir: %v", err)
+		}
+	}
+
+	amountStr := strconv.Itoa(int(req.Amount))
+	filename := req.MerchantName + "_" + amountStr + "_" + req.CreditPartyIdentifier + ".png"
+	filename = imagesDir + "/" + strings.ReplaceAll(filename, " ", "_")
+
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE, 0755)
+	if err != nil {
+		return nil, fmt.Errorf("mpesa: failed to open png file: %v", err)
+
+	}
+
+	if err = png.Encode(f, image); err != nil {
+		return nil, fmt.Errorf("mpesa: failed to encode png: %v", err)
+	}
+
+	resp.ImagePath = filename
 	return resp, nil
 }
