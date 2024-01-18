@@ -2,4 +2,3 @@
 .keys.json
 .env
 local
-storage/*
