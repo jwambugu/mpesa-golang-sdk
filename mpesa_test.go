@@ -6,6 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -814,7 +818,78 @@ func TestMpesa_DynamicQR(t *testing.T) {
 						}`
 				})
 
-				//	TODO: complete tests tomorrow I'm tired 🥱
+				resp, err := app.DynamicQR(ctx, qrReq, PayMerchantBuyGoods, false)
+				asserts.NoError(err)
+				asserts.NotNil(resp)
+				asserts.Equal("00", resp.ResponseCode)
+			},
+		},
+		{
+			name: "it makes a request and generates a qr code with the decode image",
+			mock: func(app *Mpesa, c *mockHttpClient, qrReq DynamicQRRequest) {
+				c.MockRequest(app.dynamicQRURL, func() (status int, body string) {
+					req := c.requests[1]
+
+					asserts.Equal("application/json", req.Header.Get("Content-Type"))
+					wantAuthorizationHeader := `Bearer ` + app.cache[testConsumerKey].AccessToken
+					asserts.Equal(wantAuthorizationHeader, req.Header.Get("Authorization"))
+
+					return http.StatusOK, `
+						{
+							"ResponseCode": "00",
+							"ResponseDescription": "The service request is processed successfully.",
+							"QRCode": "iVBORw0KGgoAAAANSUhEUgAAASwAAAEsCAYAAAB5fY51AAAJXElEQVR42u3dyZLbMAwFwPn/n55cU1nsIQXQANivSqfYMhewLSmy5utbRKRJvgyBiABLRARYIgIsERFgiYgAS0SAJSICLBERYIkIsOTPwfr6+msT4ybAsvCMmwiwLDzjJsCy8MS4CbAEWCLAEmAJsG5eeD9ZmKv//r/F/a/XrYDw6j07nx/1WU/2lbHPJ/MBbmC1A+vda56+fxetlf38vr+dz9z9rBMwRLUNWMBqeWrz5Nt6d/9RCz9ii/ysbBiqtkuAVRas1dOPHYR2X7vT3hVko5CJBCtyPIEFrOvBimhj5AI7CUjVNgELWKPAenf9Z/XbPOJaFrCABSxgvXzdKlgdLhIDC1jAGgjWyili1AV3YAELWMAqBZZrWMACljwq3ncYAQtYwALWKLB2Pr/TKWHkbQ07t1qcGM/ddgmwyoC1+7pp17BO3/SaPZ6R7RJgjQAre7FWAmt1HiogAyxgtQUr87pGpR/rZv9cKXMMqu9LgHUULDHnAqwyhat4Z8wrrIA1HirFO39+zTmwgCVtwRJguYYh5dESYImIAEtEgFX2usK0LWp8Ou7nZG2ow56nwcACFrDUIbCABSxgAQtYCgVYwAIWsIAFLHUILGABC1jAAhawgAUsYAELWMBSh8ACFrCABaxLweqYjgu7I8TqcG6/gAUsYKlDYCkUYAFLHQJLoQBLHQLLgAILWOoQWAoFWMCyvoClUIClDoFlQIEFLHUILIUCLGBZX8AqsWhv7tfJNqvDeV8MwAIWsNQhsBQKsIClDoGlUIAFLGABC1jAUofAUijAAhawgKVQgAUsYAELWMBSh8BSKMACFrCApVD0C1jAAhawgKUOgaVQ9AtYwAKWQtEvYAELWMAClvkClkLRL2ABC1gKRb+ABSxgAQtY5gtYCkW/gAUsYCmUqXeo37wfYAELWMACFrCABSxgqUNgKRRgAQtYwAIWsIAFLGABC1jAApZCARawgAUsYAELWMACFrCABSxgNRzQTv3q+NjiqV8M1hew9AtYwAKWAQUWsNQhsBQKsIBlfQFLv4AFLGAZUGABSx0CS6EAC1jWF7D0C1jAApYBBRaw1CGwLtw6Lkh3qN9Zh8BSKIAAFrCABSz7ARawgAUsYAELWAoFEMACFrCAZT/AAhawgAUsYAFLoQACWMACFrDsRx0CSxoFWNKuZg0BsIAlwBJgAUuAJcACFrAEWMASYAmwgCXAEmABC1gCLGAJsARYwJJ5YE2969ed3Hfe7T31lxLAAhawgAUsYAELWMACFrCABSxgAQtYwAIWsIAFLGABC1jAAhawgAUsYAELWMACFrCABSxglZrgap9VrZg6juHNi3/644+BBSxgAQtYwAIWsIAFLGABC1jAAhawgAUsYAELWMACFrCABSxgAQtYwAIWsIAFLGABC1jAsmg/vGg7LpKpOAqwgAUsYAELWMACFrCABSxgAQtYwAIWsIAFLGABC1jAAhawgAUsYAELWMACFrCABSxgAetasBRlnTGs9iWkVucCCixgAUutAksRAAtYahVYigBYahVYigBYwFKrwFIEwAKWWgWWIgCWWgWWIgAWsNQqsBQBsIClVoFV4hG3HYGYOobaAyxgAQtY2gMsiw1YgAAWsIAFLO0BFrCABSztAZbFBixAAAtYwAKW9gALWMACFrCABSxjCAhgNQKrGo4n99OxXx3hm1ob0x/HDCxgAQtYwAIWsEADLGABC1jAAhawgAUsYAELWMACFrCABSxgAQtYwAIWsIAFLGABC1jAuhQsxXSmPTfDV22cp9/FDixgAQtYwAIWsIAFLGABC1jAAhawgAUsYAELWMACFrCABSxgAQtYwAIWsIAFLGABC1jAuhSsmzFyl3avRwlPRRZYwAIWsIAFLGAZQ2ABC1jAAhawgGWxAQtYwAIWsIwhsIAFLGABC1jAstiABSxgAQtYxhBYwOrXuYZ3cnu0sc2d7sACFrBswAIWsIAFLGABC1g2YAELWMACFrCABSxgAQtYwAKWDVjAAhawgAUsYAELWMACloQDYXx6fXGad2BZkMYHWMASYBkfYAFLgAUsYIkFaXyABSwBFrCABSwLEljAApZYkMYHWMASYAELWCPBchfynYhMfWzx1F9TAAtYwAIWsIAFLHMKLGABC1jAAhawgAUsYAELWMAyp8ACFrCABSxgAQtYwAIWsIAFLGABC1jHinvqou0IxFSw1DOwgAUsYAELWMACFrCABSxgAUs9AwtYwAIWsIAFLGABC1gmGFjAUs/AAhawgEUiYAELWMACVqMJnnrn9Mm+d2zPzb+CmI4jsIAFLGABC1jAAhawgAUsYAELWMACFrCABSxgAQtYwAIWsIAFLGABC1jAAhawgAUsYAELWNeB5VHLd/5aoOMXFbCABSxgAQtYwAIWsIAFLGABC1jAAhawgAUsYAELWMACFrCABSxgAQtYwAIWsIAFLGABC1jAGtavqUBM/YVD6y8sYAELWMACFrCABSxgAQtYwAIWsIAFLGABC1jAAhawgAUsCwBYwAIWsIAFLGABC1jAMl/AAlabwb74UctTkZ0678ACFrCABSxgAQtYwAIWsBQusIAFLGABC1jAAhawgAUsYAELWMACFrCABSxgAQtYwAKWeQdWqQmeunUEa+zi8EsAYAELWMACFrCABSxgAQtYwAIWsIAFLGABC1jAAhawgAUsYAELWMACFrCABSxgAQtYwAIWsEREgCUiAiwRAZaICLBERIAlIsASEQGWiAiwRARYIiLAEhEBlogAS0QEWCICLBERYImIAEtEgCUiAiwREWBNnJQHz9rOfoZ31rPoP9Gv255RDyw5BlVnsCLaEtmv7n+IAVgCrMQjpEpgTfnrMcCSMmC9WlxZKD6F8N17s0/LnoC18u8CLFlYhJ/YZ/aRSBZYu58DLGBJAbAijq5OtesTR1eOsoAlxcFafU8XsE68ToAlSQsn4mL5qXZl9QtYwJLGYK2eCj5tV8a1sJV9AAtY0gCsyKOrTLCy+/WT17u9AVjSDKyoi9c7R1jVbmIFFrCkAFg7p4KnTlWfABgJJ7CAJYfBOnkUcuI6VNSp26v3AwtYUgisjCOQCm3MGncBlhwA6/TvEU+BlXna5ugKWFIIrNPtivifu8h+Rdz2IMCS79iLwVWOQqo9w8rFdmBJE7A+ceQXDUTWaTKogCUfAit7EZ5+PE10v0DVN78A4PhWMY/tjp0AAAAASUVORK5CYII="
+						}`
+				})
+
+				resp, err := app.DynamicQR(ctx, qrReq, PayMerchantBuyGoods, true)
+				asserts.NoError(err)
+				asserts.NotNil(resp)
+
+				defer func() {
+					err = os.Remove(resp.ImagePath)
+					asserts.NoError(err)
+				}()
+
+				asserts.Equal("00", resp.ResponseCode)
+				asserts.NotEmpty(resp.ImagePath)
+
+				wd, err := os.Getwd()
+				asserts.NoError(err)
+
+				imagesDir := filepath.Join(wd, "storage", "images")
+				amountStr := strconv.Itoa(int(qrReq.Amount))
+
+				wantFilename := qrReq.MerchantName + "_" + amountStr + "_" + qrReq.CreditPartyIdentifier + ".png"
+				wantFilename = imagesDir + "/" + strings.ReplaceAll(wantFilename, " ", "_")
+
+				asserts.Equal(wantFilename, resp.ImagePath)
+
+				_, err = os.Stat(resp.ImagePath)
+				asserts.NoError(err)
+			},
+		},
+		{
+			name: "request fails if an invalid trasaction type is passed",
+			mock: func(app *Mpesa, c *mockHttpClient, qrReq DynamicQRRequest) {
+				c.MockRequest(app.dynamicQRURL, func() (status int, body string) {
+					req := c.requests[1]
+
+					asserts.Equal("application/json", req.Header.Get("Content-Type"))
+					wantAuthorizationHeader := `Bearer ` + app.cache[testConsumerKey].AccessToken
+					asserts.Equal(wantAuthorizationHeader, req.Header.Get("Authorization"))
+
+					return http.StatusBadRequest, `
+						{
+							"requestId": "42579-78118541-4",
+							"errorCode": "400",
+							"errorMessage": "Bad Request - Invalid TrxCode"
+						}`
+				})
+
+				resp, err := app.DynamicQR(ctx, qrReq, "PayMerchantBuyGoods", true)
+				asserts.Error(err)
+				asserts.Nil(resp)
 			},
 		},
 	}
@@ -846,7 +921,6 @@ func TestMpesa_DynamicQR(t *testing.T) {
 				MerchantName:          "jwambugu",
 				ReferenceNo:           "NULLABLE",
 				Size:                  "500",
-				TransactionType:       PayMerchantBuyGoods,
 			})
 		})
 	}
