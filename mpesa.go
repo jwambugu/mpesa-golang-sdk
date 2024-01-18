@@ -12,8 +12,13 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"image/png"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -57,10 +62,11 @@ type Mpesa struct {
 	consumerSecret string
 
 	authURL         string
-	stkPushURL      string
 	b2cURL          string
-	stkPushQueryURL string
 	c2bURL          string
+	dynamicQRURL    string
+	stkPushQueryURL string
+	stkPushURL      string
 }
 
 var (
@@ -87,16 +93,19 @@ func NewApp(c HttpClient, consumerKey, consumerSecret string, env Environment) *
 	}
 
 	return &Mpesa{
-		client:          c,
-		environment:     env,
-		cache:           make(cache),
-		consumerKey:     consumerKey,
-		consumerSecret:  consumerSecret,
+		client:      c,
+		environment: env,
+		cache:       make(cache),
+
+		consumerKey:    consumerKey,
+		consumerSecret: consumerSecret,
+
 		authURL:         baseUrl + `/oauth/v1/generate?grant_type=client_credentials`,
-		stkPushURL:      baseUrl + `/mpesa/stkpush/v1/processrequest`,
 		b2cURL:          baseUrl + `/mpesa/b2c/v1/paymentrequest`,
-		stkPushQueryURL: baseUrl + `/mpesa/stkpushquery/v1/query`,
 		c2bURL:          baseUrl + `/mpesa/c2b/v1/registerurl`,
+		dynamicQRURL:    baseUrl + `/mpesa/qrcode/v1/generate`,
+		stkPushQueryURL: baseUrl + `/mpesa/stkpushquery/v1/query`,
+		stkPushURL:      baseUrl + `/mpesa/stkpush/v1/processrequest`,
 	}
 }
 
@@ -325,9 +334,7 @@ func (m *Mpesa) STKQuery(ctx context.Context, passkey string, req STKQueryReques
 	if resp.ErrorCode != "" {
 		return nil, fmt.Errorf(
 			"mpesa: stk push query request ID %v failed with error code %v:%v",
-			resp.RequestID,
-			resp.ErrorCode,
-			resp.ErrorMessage,
+			resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
 		)
 	}
 
@@ -361,4 +368,73 @@ func (m *Mpesa) RegisterC2BURL(ctx context.Context, req RegisterC2BURLRequest) (
 	default:
 		return nil, fmt.Errorf("mpesa: the provided ResponseType [%s] is not valid", req.ResponseType)
 	}
+}
+
+// DynamicQR API is used to generate a Dynamic QR which enables Safaricom M-PESA customers who have My Safaricom App or
+// M-PESA app, to scan a QR (Quick Response) code, to capture till number and amount then authorize to pay for goods and
+// services at select LIPA NA M-PESA (LNM) merchant outlets. If the decodeImage parameter is set to true, the QR code
+// will be decoded and a base url is set on the ImagePath field
+func (m *Mpesa) DynamicQR(
+	ctx context.Context, req DynamicQRRequest, transactionType DynamicQRTransactionType, decodeImage bool,
+) (*DynamicQRResponse, error) {
+	req.TransactionType = transactionType
+
+	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.dynamicQRURL, req)
+	if err != nil {
+		return nil, err
+	}
+
+	//goland:noinspection GoUnhandledErrorResult
+	defer res.Body.Close()
+
+	var resp *DynamicQRResponse
+	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
+		return nil, fmt.Errorf("mpesa: error decoding dynamic QR response - %v", err)
+	}
+
+	if resp.ErrorCode != "" {
+		return nil, fmt.Errorf("mpesa: dynamic QR request ID %v failed with error code %v:%v",
+			resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
+		)
+	}
+
+	if !decodeImage {
+		return resp, nil
+	}
+
+	reader := base64.NewDecoder(base64.StdEncoding, strings.NewReader(resp.QRCode))
+
+	image, err := png.Decode(reader)
+	if err != nil {
+		return nil, fmt.Errorf("mpesa: failed to decode png: %v", err)
+	}
+
+	wd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("mpesa: failed to get working dir: %v", err)
+	}
+
+	imagesDir := filepath.Join(wd, "storage", "images")
+	if _, err := os.Stat(imagesDir); os.IsNotExist(err) {
+		if err = os.Mkdir(imagesDir, os.ModePerm); err != nil {
+			return nil, fmt.Errorf("mpesa: failed to create images dir: %v", err)
+		}
+	}
+
+	amountStr := strconv.Itoa(int(req.Amount))
+	filename := req.MerchantName + "_" + amountStr + "_" + req.CreditPartyIdentifier + ".png"
+	filename = imagesDir + "/" + strings.ReplaceAll(filename, " ", "_")
+
+	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE, 0755)
+	if err != nil {
+		return nil, fmt.Errorf("mpesa: failed to open png file: %v", err)
+
+	}
+
+	if err = png.Encode(f, image); err != nil {
+		return nil, fmt.Errorf("mpesa: failed to encode png: %v", err)
+	}
+
+	resp.ImagePath = filename
+	return resp, nil
 }
