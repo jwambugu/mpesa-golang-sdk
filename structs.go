@@ -14,6 +14,21 @@ const (
 	SentToBusiness DynamicQRTransactionType = "SB"
 )
 
+// CommandID is a unique command that specifies B2C transaction type.
+type CommandID string
+
+const (
+	// SalaryPayment command is used for sending money to both registered and unregistered M-Pesa customers.
+	SalaryPayment CommandID = "SalaryPayment"
+
+	// BusinessPayment is a normal business to customer payment, supports only M-PESA registered customers.
+	BusinessPayment CommandID = "BusinessPayment"
+
+	// PromotionPayment is a promotional payment to customers. The M-PESA notification message is a congratulatory
+	// message. Supports only M-PESA registered customers.
+	PromotionPayment CommandID = "PromotionPayment"
+)
+
 type (
 	// AuthorizationResponse is returned when trying to authenticate the app using provided credentials
 	AuthorizationResponse struct {
@@ -79,7 +94,7 @@ type (
 
 		// ConversationID is a global unique identifier for the transaction request returned by the M-Pesa upon successful
 		// request submission.
-		ConversationID string `json:"ConversationID"`
+		ConversationID string `json:"ConversationID,omitempty"`
 
 		// CustomerMessage is a message that your system can display to the Customer as an acknowledgement of the
 		// payment request submission. Example: Success. Request accepted for processing.
@@ -87,17 +102,17 @@ type (
 
 		// ErrorCode is a predefined code that indicates the reason for request failure that is defined in the
 		// ErrorMessage. The error codes maps to specific error message.
-		ErrorCode string `json:"errorCode"`
+		ErrorCode string `json:"errorCode,omitempty"`
 
 		// ErrorMessage is a short descriptive message of the failure reason.
-		ErrorMessage string `json:"errorMessage"`
+		ErrorMessage string `json:"errorMessage,omitempty"`
 
 		// MerchantRequestID is a global unique Identifier for any submitted payment request. Example: 16813-1590513-1
 		MerchantRequestID string `json:"MerchantRequestID,omitempty"`
 
 		// OriginatorConversationID is a global unique identifier for the transaction request returned by the API proxy
 		// upon successful request submission.
-		OriginatorConversationID string `json:"OriginatorConversationID"`
+		OriginatorConversationID string `json:"OriginatorConversationID,omitempty"`
 
 		// ResponseCode is a numeric status code that indicates the status of the transaction submission.
 		// 0 means successful submission and any other code means an error occurred.
@@ -109,14 +124,14 @@ type (
 
 		// ResultCode is a numeric status code that indicates the status of the transaction processing.
 		// 0 means successful processing and any other code means an error occured or the transaction failed.
-		ResultCode string `json:"ResultCode"`
+		ResultCode string `json:"ResultCode,omitempty"`
 
 		// ResultDesc description is a message from the API that gives the status of the request processing, usualy maps
 		// to a specific ResultCode value. It can be a success or an error description message.
-		ResultDesc string `json:"ResultDesc"`
+		ResultDesc string `json:"ResultDesc,omitempty"`
 
 		// RequestID is a unique request ID for the payment request
-		RequestID string `json:"requestId"`
+		RequestID string `json:"requestId,omitempty"`
 	}
 
 	STKCallbackItem struct {
@@ -197,13 +212,14 @@ type (
 		// SecurityCredential is the value obtained after encrypting the API initiator password.
 		SecurityCredential string `json:"SecurityCredential"`
 
-		// CommandID is a unique command that specifies B2C transaction type.
-		// Examples:
-		//	SalaryPayment: This supports sending money to both registered and unregistered M-Pesa customers.
-		//  BusinessPayment: This is a normal business to customer payment,supports only M-Pesa registered customers.
-		//	PromotionPayment: This is a promotional payment to customers. The M-Pesa notification message is a
-		//	congratulatory message and supports only M-Pesa registered customers.
-		CommandID string `json:"CommandID"`
+		/*
+			CommandID is a unique command that specifies B2C transaction type.
+				- SalaryPayment: This supports sending money to both registered and unregistered M-Pesa customers.
+				- BusinessPayment: This is a normal business to customer payment,supports only M-Pesa registered customers.
+				- PromotionPayment: This is a promotional payment to customers. The M-Pesa notification message is a
+				congratulatory message and supports only M-Pesa registered customers.
+		*/
+		CommandID CommandID `json:"CommandID"`
 
 		// Amount to be sent to the customer.
 		Amount uint `json:"Amount"`
@@ -325,20 +341,6 @@ type (
 		ValidationURL string `json:"ValidationURL"`
 	}
 
-	RegisterC2BURLResponse struct {
-		// OriginatorConversationID is a global unique identifier for the transaction request returned by the API proxy
-		// upon successful request submission.
-		OriginatorConversationID string `json:"OriginatorConversationID"`
-
-		// ResponseCode is a numeric status code that indicates the status of the transaction submission.
-		// 0 means successful submission and any other code means an error occurred.
-		ResponseCode string `json:"ResponseCode"`
-
-		// ResponseDescription is an acknowledgment message from the API that gives the status of the request submission.
-		// It usually maps to a specific ResponseCode value which can be a success message or an error description.
-		ResponseDescription string `json:"ResponseDescription"`
-	}
-
 	DynamicQRRequest struct {
 		// Total Amount for the sale or transaction
 		Amount uint `json:"Amount"`
@@ -357,11 +359,11 @@ type (
 
 		/*
 			TransactionType represents the type of transaction being made.
-				BG: Pay Merchant (Buy Goods).
-				WA: Withdraw Cash at Agent Till.
-				PB: Paybill or Business number.
-				SM: Send Money(Mobile number)
-				SB: Sent to Business. Business number CPI in MSISDN format.
+				- PayMerchantBuyGoods: Pay Merchant (Buy Goods).
+				- WithdrawCashAtAgentTill: Withdraw Cash at Agent Till.
+				- PaybillOrBusinessNumber: Paybill or Business number.
+				- SendMoneyViaMobileNumber: Send Money(Mobile number)
+				- SentToBusiness: Sent to Business. Business number CPI in MSISDN format.
 		*/
 		TransactionType DynamicQRTransactionType `json:"TrxCode"`
 	}
@@ -378,15 +380,15 @@ type (
 		ErrorMessage string `json:"errorMessage,omitempty"`
 
 		// QRCode Image/Data/String.
-		QRCode string `json:"QRCode"`
+		QRCode string `json:"QRCode,omitempty"`
 
 		// RequestID represents the ID for the request
 		RequestID string `json:"requestId,omitempty"`
 
 		// ResponseCode is a numeric status code that indicates the status of the transaction submission.
-		ResponseCode string `json:"ResponseCode"`
+		ResponseCode string `json:"ResponseCode,omitempty"`
 
 		// ResponseDescription is a response describing the status of the transaction.
-		ResponseDescription string `json:"ResponseDescription"`
+		ResponseDescription string `json:"ResponseDescription,omitempty"`
 	}
 )
