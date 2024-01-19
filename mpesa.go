@@ -347,7 +347,7 @@ func (m *Mpesa) STKQuery(ctx context.Context, passkey string, req STKQueryReques
 // Validation URL: This is the URL that is only used when a Merchant (Partner) requires to validate the details of the payment before accepting.
 // For example, a bank would want to verify if an account number exists in their platform before accepting a payment from the customer.
 // Confirmation URL:  This is the URL that receives payment notification once payment has been completed successfully on M-PESA.
-func (m *Mpesa) RegisterC2BURL(ctx context.Context, req RegisterC2BURLRequest) (*RegisterC2BURLResponse, error) {
+func (m *Mpesa) RegisterC2BURL(ctx context.Context, req RegisterC2BURLRequest) (*GeneralRequestResponse, error) {
 	switch req.ResponseType {
 	case ResponseTypeComplete, ResponseTypeCanceled:
 		response, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.c2bURL, req)
@@ -358,7 +358,7 @@ func (m *Mpesa) RegisterC2BURL(ctx context.Context, req RegisterC2BURLRequest) (
 			_ = body.Close()
 		}(response.Body)
 
-		var result RegisterC2BURLResponse
+		var result GeneralRequestResponse
 		err = json.NewDecoder(response.Body).Decode(&result)
 		if err != nil {
 			return nil, errors.Join(errors.New("mpesa: could not unmarshall c2b response body"), err)
