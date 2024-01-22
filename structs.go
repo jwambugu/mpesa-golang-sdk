@@ -32,6 +32,11 @@ const (
 	TransactionStatusQuery CommandID = "TransactionStatusQuery"
 )
 
+// IdentifierType is the type of organization receiving the transaction
+type IdentifierType uint8
+
+const Shortcode IdentifierType = 4
+
 type (
 	// AuthorizationResponse is returned when trying to authenticate the app using provided credentials
 	AuthorizationResponse struct {
@@ -396,12 +401,12 @@ type (
 	}
 )
 
-type TransactionStatusReq struct {
+type TransactionStatusRequest struct {
 	// The CommandID for the request - TransactionStatusQuery
 	CommandID CommandID `json:"CommandID"`
 
-	// IdentifierType is the yype of organization receiving the transaction
-	IdentifierType string `json:"IdentifierType"`
+	// IdentifierType is the type of organization receiving the transaction
+	IdentifierType IdentifierType `json:"IdentifierType"`
 
 	// Initiator is the credential/username used to authenticate the transaction request.
 	Initiator string `json:"Initiator"`

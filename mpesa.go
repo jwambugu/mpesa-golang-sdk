@@ -470,7 +470,7 @@ func (m *Mpesa) DynamicQR(
 
 // GetTransactionStatus checks the status of a transaction
 func (m *Mpesa) GetTransactionStatus(
-	ctx context.Context, initiatorPwd string, req TransactionStatusReq,
+	ctx context.Context, initiatorPwd string, req TransactionStatusRequest,
 ) (*GeneralRequestResponse, error) {
 	if initiatorPwd == "" {
 		return nil, ErrInvalidInitiatorPassword
@@ -491,6 +491,7 @@ func (m *Mpesa) GetTransactionStatus(
 
 	req.SecurityCredential = securityCredential
 	req.CommandID = TransactionStatusQuery
+	req.IdentifierType = Shortcode
 
 	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.txnStatusURL, req)
 	if err != nil {
