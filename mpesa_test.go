@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/stretchr/testify/require"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -792,8 +793,8 @@ func Test_RegisterC2BURL(t *testing.T) {
 
 func TestMpesa_DynamicQR(t *testing.T) {
 	var (
-		asserts = assert.New(t)
 		ctx     = context.Background()
+		asserts = assert.New(t)
 	)
 
 	tests := []struct {
@@ -922,6 +923,192 @@ func TestMpesa_DynamicQR(t *testing.T) {
 				ReferenceNo:           "NULLABLE",
 				Size:                  "500",
 			})
+		})
+	}
+}
+
+func TestMpesa_GetTransactionStatus(t *testing.T) {
+	var (
+		ctx              = context.Background()
+		initatorPassword = "random-string"
+	)
+
+	tests := []struct {
+		name          string
+		txnStatusReq  TransactionStatusRequest
+		env           Environment
+		mock          func(t *testing.T, app *Mpesa, c *mockHttpClient, txnStatusReq TransactionStatusRequest)
+		requestsCount int
+	}{
+		{
+			name: "it generates valid security credentials and makes the request successfully on sandbox",
+			env:  Sandbox,
+			txnStatusReq: TransactionStatusRequest{
+				Initiator:       "testapi",
+				Occasion:        "Test",
+				PartyA:          "600426",
+				QueueTimeOutURL: "https://example.com/",
+				Remarks:         "Test remarks",
+				ResultURL:       "https://example.com/",
+				TransactionID:   "SAM62HFIRW",
+			},
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, txnStatusReq TransactionStatusRequest) {
+				c.MockRequest(app.txnStatusURL, func() (status int, body string) {
+					req := c.requests[1]
+
+					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
+					wantAuthorizationHeader := `Bearer ` + app.cache[testConsumerKey].AccessToken
+					require.Equal(t, wantAuthorizationHeader, req.Header.Get("Authorization"))
+
+					var reqParams TransactionStatusRequest
+
+					err := json.NewDecoder(req.Body).Decode(&reqParams)
+					require.NoError(t, err)
+					require.NotEmpty(t, reqParams.SecurityCredential) // TODO: verify the security credential
+
+					return http.StatusOK, `{
+						"OriginatorConversationID": "2ba8-4165-beca-292db11f9ef878061",
+						"ConversationID": "AG_20240122_2010332bae9191b3d522",
+						"ResponseCode": "0",
+						"ResponseDescription": "Accept the service request successfully."
+					}`
+				})
+
+				res, err := app.GetTransactionStatus(ctx, initatorPassword, txnStatusReq)
+				require.NoError(t, err)
+				require.NotNil(t, res)
+				require.Contains(t, res.ResponseDescription, "Accept the service request successfully")
+			},
+			requestsCount: 2,
+		},
+		{
+			name: "it generates valid security credentials and makes the request successfully on production",
+			env:  Production,
+			txnStatusReq: TransactionStatusRequest{
+				Initiator:       "testapi",
+				Occasion:        "Test",
+				PartyA:          "600426",
+				QueueTimeOutURL: "https://example.com/",
+				Remarks:         "Test remarks",
+				ResultURL:       "https://example.com/",
+				TransactionID:   "SAM62HFIRW",
+			},
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, txnStatusReq TransactionStatusRequest) {
+				c.MockRequest(app.txnStatusURL, func() (status int, body string) {
+					req := c.requests[1]
+
+					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
+					wantAuthorizationHeader := `Bearer ` + app.cache[testConsumerKey].AccessToken
+					require.Equal(t, wantAuthorizationHeader, req.Header.Get("Authorization"))
+
+					var reqParams TransactionStatusRequest
+
+					err := json.NewDecoder(req.Body).Decode(&reqParams)
+					require.NoError(t, err)
+					require.NotEmpty(t, reqParams.SecurityCredential) // TODO: verify the security credential
+
+					return http.StatusOK, `{
+						"OriginatorConversationID": "2ba8-4165-beca-292db11f9ef878061",
+						"ConversationID": "AG_20240122_2010332bae9191b3d522",
+						"ResponseCode": "0",
+						"ResponseDescription": "Accept the service request successfully."
+					}`
+				})
+
+				res, err := app.GetTransactionStatus(ctx, initatorPassword, txnStatusReq)
+				require.NoError(t, err)
+				require.NotNil(t, res)
+				require.Contains(t, res.ResponseDescription, "Accept the service request successfully")
+			},
+			requestsCount: 2,
+		},
+		{
+			name: "request fails if no initiator password is provided",
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, txnStatusReq TransactionStatusRequest) {
+				res, err := app.GetTransactionStatus(ctx, "", txnStatusReq)
+				require.NotNil(t, err)
+				require.EqualError(t, err, ErrInvalidInitiatorPassword.Error())
+				require.Nil(t, res)
+			},
+			requestsCount: 1,
+		},
+		{
+			name:         "request fails if invalid queue timeout URL is passed",
+			txnStatusReq: TransactionStatusRequest{QueueTimeOutURL: "http://example.com"},
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, txnStatusReq TransactionStatusRequest) {
+				res, err := app.GetTransactionStatus(ctx, initatorPassword, txnStatusReq)
+				require.NotNil(t, err)
+				require.Contains(t, err.Error(), "must use \"https\"")
+				require.Nil(t, res)
+			},
+			requestsCount: 1,
+		},
+		{
+			name: "request fails if invalid queue timeout URL is passed",
+			txnStatusReq: TransactionStatusRequest{
+				QueueTimeOutURL: "https://example.com",
+				ResultURL:       "http://example.com",
+			},
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, txnStatusReq TransactionStatusRequest) {
+				res, err := app.GetTransactionStatus(ctx, initatorPassword, txnStatusReq)
+				require.NotNil(t, err)
+				require.Contains(t, err.Error(), "must use \"https\"")
+				require.Nil(t, res)
+			},
+			requestsCount: 1,
+		},
+		{
+			name: "request fails with an error code",
+			txnStatusReq: TransactionStatusRequest{
+				Initiator:       "testapi",
+				Occasion:        "Test",
+				PartyA:          "600426",
+				QueueTimeOutURL: "https://example.com/",
+				Remarks:         "Test remarks",
+				ResultURL:       "https://example.com/",
+				TransactionID:   "SAM62HFIRW",
+			},
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, txnStatusReq TransactionStatusRequest) {
+				c.MockRequest(app.txnStatusURL, func() (status int, body string) {
+					return http.StatusBadRequest, `
+					{    
+					   "requestId": "11728-2929992-1",
+					   "errorCode": "401.002.01",
+					   "errorMessage": "Error Occurred - Invalid Access Token - BJGFGOXv5aZnw90KkA4TDtu4Xdyf"
+					}`
+				})
+
+				res, err := app.GetTransactionStatus(ctx, initatorPassword, txnStatusReq)
+				require.NotNil(t, err)
+				require.Nil(t, res)
+				require.Contains(t, err.Error(), "401.002.01")
+			},
+			requestsCount: 2,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var (
+				cl  = newMockHttpClient()
+				app = NewApp(cl, testConsumerKey, testConsumerSecret, tc.env)
+			)
+
+			cl.MockRequest(app.authURL, func() (status int, body string) {
+				return http.StatusOK, `
+				{
+					"access_token": "0A0v8OgxqqoocblflR58m9chMdnU",
+					"expires_in": "3599"
+				}`
+			})
+
+			tc.mock(t, app, cl, tc.txnStatusReq)
+			_, err := app.GenerateAccessToken(ctx)
+			require.NoError(t, err)
+			require.Len(t, cl.requests, tc.requestsCount)
 		})
 	}
 }

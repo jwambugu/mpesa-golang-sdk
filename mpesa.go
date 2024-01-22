@@ -15,6 +15,7 @@ import (
 	"image/png"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -38,6 +39,9 @@ const (
 )
 
 var accessTokenTTL = 55 * time.Minute
+
+// requiredURLScheme present the required scheme for the callbacks
+const requiredURLScheme = "https"
 
 // IsProduction returns true if the current env is set to production.
 func (e Environment) IsProduction() bool {
@@ -67,6 +71,7 @@ type Mpesa struct {
 	dynamicQRURL    string
 	stkPushQueryURL string
 	stkPushURL      string
+	txnStatusURL    string
 }
 
 var (
@@ -78,6 +83,20 @@ const (
 	sandboxBaseURL    = "https://sandbox.safaricom.co.ke"
 	productionBaseURL = "https://api.safaricom.co.ke"
 )
+
+// validateURL checks if the provided URL is valid and is being server via https
+func validateURL(rawURL string) error {
+	u, err := url.ParseRequestURI(rawURL)
+	if err != nil {
+		return fmt.Errorf("mpesa: %v", err)
+	}
+
+	if u.Scheme != requiredURLScheme {
+		return fmt.Errorf("mpesa: %q must use %q", rawURL, requiredURLScheme)
+	}
+
+	return nil
+}
 
 // NewApp initializes a new Mpesa app that will be used to perform C2B or B2C transactions.
 func NewApp(c HttpClient, consumerKey, consumerSecret string, env Environment) *Mpesa {
@@ -106,6 +125,7 @@ func NewApp(c HttpClient, consumerKey, consumerSecret string, env Environment) *
 		dynamicQRURL:    baseUrl + `/mpesa/qrcode/v1/generate`,
 		stkPushQueryURL: baseUrl + `/mpesa/stkpushquery/v1/query`,
 		stkPushURL:      baseUrl + `/mpesa/stkpush/v1/processrequest`,
+		txnStatusURL:    baseUrl + `/mpesa/transactionstatus/v1/query`,
 	}
 }
 
@@ -237,12 +257,7 @@ func UnmarshalSTKPushCallback(in interface{}) (*STKPushCallback, error) {
 	return &callback, nil
 }
 
-// B2C transacts between an M-Pesa short code to a phone number registered on M-Pesa
-func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*GeneralRequestResponse, error) {
-	if initiatorPwd == "" {
-		return nil, ErrInvalidInitiatorPassword
-	}
-
+func (m *Mpesa) generateSecurityCredentials(initiatorPwd string) (string, error) {
 	certPath := "certs/sandbox.cer"
 	if m.Environment().IsProduction() {
 		certPath = "certs/production.cer"
@@ -250,7 +265,7 @@ func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*
 
 	publicKey, err := certFS.ReadFile(certPath)
 	if err != nil {
-		return nil, fmt.Errorf("mpesa: error opening cert %v - %v", certPath, err)
+		return "", fmt.Errorf("mpesa: error opening cert %v - %v", certPath, err)
 	}
 
 	block, _ := pem.Decode(publicKey)
@@ -258,17 +273,31 @@ func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*
 	var cert *x509.Certificate
 	cert, err = x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		return nil, fmt.Errorf("mpesa: error parsing cert %v - %v", certPath, err)
+		return "", fmt.Errorf("mpesa: error parsing cert %v - %v", certPath, err)
 	}
 
 	rsaPublicKey := cert.PublicKey.(*rsa.PublicKey)
 	reader := rand.Reader
 	signature, err := rsa.EncryptPKCS1v15(reader, rsaPublicKey, []byte(initiatorPwd))
 	if err != nil {
-		return nil, fmt.Errorf("mpesa: error encrypting initiator password: %v", err)
+		return "", fmt.Errorf("mpesa: error encrypting initiator password: %v", err)
 	}
 
-	req.SecurityCredential = base64.StdEncoding.EncodeToString(signature)
+	return base64.StdEncoding.EncodeToString(signature), nil
+}
+
+// B2C transacts between an M-Pesa short code to a phone number registered on M-Pesa
+func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*GeneralRequestResponse, error) {
+	if initiatorPwd == "" {
+		return nil, ErrInvalidInitiatorPassword
+	}
+
+	securityCredential, err := m.generateSecurityCredentials(initiatorPwd)
+	if err != nil {
+		return nil, err
+	}
+
+	req.SecurityCredential = securityCredential
 
 	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.b2cURL, req)
 	if err != nil {
@@ -279,7 +308,7 @@ func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*
 	defer res.Body.Close()
 
 	var resp GeneralRequestResponse
-	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
+	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
 		return nil, fmt.Errorf("mpesa: error decoding b2c request response - %v", err)
 	}
 
@@ -437,4 +466,52 @@ func (m *Mpesa) DynamicQR(
 
 	resp.ImagePath = filename
 	return resp, nil
+}
+
+// GetTransactionStatus checks the status of a transaction
+func (m *Mpesa) GetTransactionStatus(
+	ctx context.Context, initiatorPwd string, req TransactionStatusRequest,
+) (*GeneralRequestResponse, error) {
+	if initiatorPwd == "" {
+		return nil, ErrInvalidInitiatorPassword
+	}
+
+	if err := validateURL(req.QueueTimeOutURL); err != nil {
+		return nil, err
+	}
+
+	if err := validateURL(req.ResultURL); err != nil {
+		return nil, err
+	}
+
+	securityCredential, err := m.generateSecurityCredentials(initiatorPwd)
+	if err != nil {
+		return nil, err
+	}
+
+	req.SecurityCredential = securityCredential
+	req.CommandID = TransactionStatusQuery
+	req.IdentifierType = Shortcode
+
+	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.txnStatusURL, req)
+	if err != nil {
+		return nil, err
+	}
+
+	//goland:noinspection GoUnhandledErrorResult
+	defer res.Body.Close()
+
+	var resp GeneralRequestResponse
+	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
+		return nil, fmt.Errorf("mpesa: failed to decode transaction status request response: %v", err)
+	}
+
+	if resp.ErrorCode != "" {
+		return nil, fmt.Errorf(
+			"mpesa: transaction status request ID %v failed with error code %v: %v",
+			resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
+		)
+	}
+
+	return &resp, nil
 }
