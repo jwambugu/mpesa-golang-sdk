@@ -27,6 +27,9 @@ const (
 	// PromotionPayment is a promotional payment to customers. The M-PESA notification message is a congratulatory
 	// message. Supports only M-PESA registered customers.
 	PromotionPayment CommandID = "PromotionPayment"
+
+	// TransactionStatusQuery command ID is applied when getting the status of a transaction.
+	TransactionStatusQuery CommandID = "TransactionStatusQuery"
 )
 
 type (
@@ -392,3 +395,42 @@ type (
 		ResponseDescription string `json:"ResponseDescription,omitempty"`
 	}
 )
+
+type TransactionStatusReq struct {
+	// The CommandID for the request - TransactionStatusQuery
+	CommandID CommandID `json:"CommandID"`
+
+	// IdentifierType is the yype of organization receiving the transaction
+	IdentifierType string `json:"IdentifierType"`
+
+	// Initiator is the credential/username used to authenticate the transaction request.
+	Initiator string `json:"Initiator"`
+
+	// Occasion is an optional paramater that is a sequence of characters up to 100
+	Occasion string `json:"Occasion"`
+	//OriginatorConversationID string `json:"OriginatorConversationID"`
+
+	// OriginatorConversationID is a global unique identifier for the transaction request returned by the API proxy
+	// upon successful request submission. If you don’t have the M-PESA transaction ID you can use this to query.
+	OriginatorConversationID string `json:"OriginatorConversationID,omitempty"`
+
+	// PartyA is an Organization/MSISDN receiving the transaction. Shortcode (6-9 digits) MSISDN (12 Digits)
+	PartyA string `json:"PartyA"`
+
+	// QueueTimeOutURL is the endpoint that will be used by API Proxy to send notification incase the request is timed
+	//out while awaiting processing in the queue. Must be served via https.
+	QueueTimeOutURL string `json:"QueueTimeOutURL"`
+
+	// Remarks are comments that are sent along with the transaction. They are a sequence of characters up to 100
+	Remarks string `json:"Remarks"`
+
+	// ResultURL is the endpoint that will be used by M-PESA to send notification upon processing of the request.
+	// Must be served via https.
+	ResultURL string `json:"ResultURL"`
+
+	// SecurityCredential is an encrypted password for the initiator to authenticate the transaction request
+	SecurityCredential string `json:"SecurityCredential"`
+
+	// TransactionID is a unique identifier to identify a transaction on Mpesa
+	TransactionID string `json:"TransactionID"`
+}
