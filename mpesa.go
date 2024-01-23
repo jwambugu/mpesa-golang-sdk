@@ -554,13 +554,12 @@ func (m *Mpesa) GetAccountBalance(
 
 	var resp GeneralRequestResponse
 	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
-		return nil, fmt.Errorf("mpesa: failed to decode transaction status request response: %v", err)
+		return nil, fmt.Errorf("mpesa: decode response: %v", err)
 	}
 
 	if resp.ErrorCode != "" {
 		return nil, fmt.Errorf(
-			"mpesa: transaction status request ID %v failed with error code %v: %v",
-			resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
+			"mpesa: request %v failed with code %v: %v", resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
 		)
 	}
 
