@@ -264,21 +264,21 @@ type (
 		Value interface{} `json:"Value"`
 	}
 
-	B2CResultParameters struct {
-		// ResultParameter is a JSON array within the B2CResultParameters.
+	ResultParameters struct {
+		// ResultParameter is a JSON array within the ResultParameters.
 		ResultParameter []ResultParameter `json:"ResultParameter"`
 	}
 
-	B2CReferenceItem struct {
+	ReferenceItem struct {
 		Key   string `json:"Key"`
 		Value string `json:"Value"`
 	}
 
-	B2CReferenceData struct {
-		ReferenceItem B2CReferenceItem `json:"ReferenceItem"`
+	ReferenceData struct {
+		ReferenceItem ReferenceItem `json:"ReferenceItem"`
 	}
 
-	B2CCallbackResult struct {
+	CallbackResult struct {
 		// ConversationID is a global unique identifier for the transaction request returned by the M-Pesa
 		// upon successful request submission.
 		ConversationID string `json:"ConversationID"`
@@ -287,7 +287,7 @@ type (
 		// proxy upon successful request submission.
 		OriginatorConversationID string `json:"OriginatorConversationID"`
 
-		ReferenceData B2CReferenceData `json:"ReferenceData"`
+		ReferenceData ReferenceData `json:"ReferenceData"`
 
 		// ResultCode is a numeric status code that indicates the status of the transaction processing.
 		// 0 means success and any other code means an error occurred or the transaction failed.
@@ -298,7 +298,7 @@ type (
 		ResultDesc string `json:"ResultDesc"`
 
 		// ResultParameters is a JSON object that holds more details for the transaction.
-		ResultParameters B2CResultParameters `json:"ResultParameters"`
+		ResultParameters ResultParameters `json:"ResultParameters"`
 
 		// ResultType is a status code that indicates whether the transaction was already sent to your listener.
 		// Usual value is 0.
@@ -309,9 +309,9 @@ type (
 		TransactionID string `json:"TransactionID"`
 	}
 
-	B2CCallback struct {
+	Callback struct {
 		// Result is the root parameter that encloses the entire result message.
-		Result B2CCallbackResult `json:"Result"`
+		Result CallbackResult `json:"Result"`
 	}
 
 	STKQueryRequest struct {

@@ -326,14 +326,14 @@ func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*
 	return &resp, nil
 }
 
-// UnmarshalB2CCallback decodes the provided value to B2CCallback
-func UnmarshalB2CCallback(in interface{}) (*B2CCallback, error) {
+// UnmarshalCallback decodes the provided value to Callback
+func UnmarshalCallback(in interface{}) (*Callback, error) {
 	b, err := toBytes(in)
 	if err != nil {
 		return nil, fmt.Errorf("mpesa: error unmarshing input - %v", err)
 	}
 
-	var callback B2CCallback
+	var callback Callback
 	if err := json.Unmarshal(b, &callback); err != nil {
 		return nil, fmt.Errorf("mpesa: error unmarshling stk push callback - %v", err)
 	}

@@ -477,15 +477,16 @@ func TestMpesa_B2C(t *testing.T) {
 	}
 }
 
-func TestUnmarshalB2CCallback(t *testing.T) {
+func TestUnmarshalCallback(t *testing.T) {
 	asserts := assert.New(t)
 
 	tests := []struct {
-		name  string
-		input interface{}
+		name           string
+		input          interface{}
+		wantResultCode int
 	}{
 		{
-			name: "it can unmarshal a successful transaction callback string",
+			name: "it can unmarshal a successful b2c callback string",
 			input: `
 			{    
 			   "Result": {
@@ -539,36 +540,77 @@ func TestUnmarshalB2CCallback(t *testing.T) {
 				  }
 			   }
 			}`,
+			wantResultCode: 0,
 		},
 		{
-			name: "it can unmarshal an unsuccessful transaction callback struct",
-			input: B2CCallback{
-				Result: B2CCallbackResult{
+			name: "it can unmarshal an unsuccessful request callback struct",
+			input: Callback{
+				Result: CallbackResult{
 					ResultType:               0,
-					ResultCode:               0,
+					ResultCode:               2001,
 					ResultDesc:               "The initiator information is invalid.",
-					OriginatorConversationID: "29112-34801843-1",
+					OriginatorConversationID: "10571-7910404-1",
 					ConversationID:           "AG_20191219_00004e48cf7e3533f581",
 					TransactionID:            "NLJ41HAY6Q",
-					ReferenceData: B2CReferenceData{
-						ReferenceItem: B2CReferenceItem{
+					ReferenceData: ReferenceData{
+						ReferenceItem: ReferenceItem{
 							Key:   "QueueTimeoutURL",
 							Value: "https:\\/\\/internalsandbox.safaricom.co.ke\\/mpesa\\/b2cresults\\/v1\\/submit",
 						},
 					},
 				},
 			},
+			wantResultCode: 2001,
+		},
+		{
+			name: "it can unmarshal a successfull account balance request callback",
+			input: `
+			{
+			  "Result": {
+				"ResultType": 0,
+				"ResultCode": 0,
+				"ResultDesc": "The service request is processed successfully.",
+				"OriginatorConversationID": "10571-7910404-1",
+				"ConversationID": "AG_20191219_00004e48cf7e3533f581",
+				"TransactionID": "SAO0000000",
+				"ResultParameters": {
+				  "ResultParameter": [
+					{
+					  "Key": "ActionType",
+					  "Value": "AccountBalance"
+					},
+					{
+					  "Key": "AccountBalance",
+					  "Value": "Working Account|KES|0.00|0.00|0.00|0.00&Utility Account|KES|0.00|0.00|0.00|0.00&Charges Paid Account|KES|0.00|0.00|0.00|0.00&Organization Settlement Account|KES|0.00|0.00|0.00|0.00"
+					},
+					{
+					  "Key": "BOCompletedTime",
+					  "Value": 20240124163140
+					}
+				  ]
+				},
+				"ReferenceData": {
+				  "ReferenceItem": {
+					"Key": "QueueTimeoutURL",
+					"Value": "https:\/\/internalapi.safaricom.co.ke\/mpesa\/abresults\/v1\/submit"
+				  }
+				}
+			  }
+			}`,
+			wantResultCode: 0,
 		},
 	}
 
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			callback, err := UnmarshalB2CCallback(tc.input)
+			callback, err := UnmarshalCallback(tc.input)
 			asserts.NoError(err)
 			asserts.NotNil(callback)
 			asserts.Equal("AG_20191219_00004e48cf7e3533f581", callback.Result.ConversationID)
+			asserts.Equal("10571-7910404-1", callback.Result.OriginatorConversationID)
 			asserts.Equal("QueueTimeoutURL", callback.Result.ReferenceData.ReferenceItem.Key)
+			asserts.Equal(tc.wantResultCode, callback.Result.ResultCode)
 		})
 	}
 }
@@ -1127,7 +1169,7 @@ func TestMpesa_GetAccountBalance(t *testing.T) {
 		requestsCount     int
 	}{
 		{
-			name: "it generates valid security credentials and makes the request successfully on sandbox",
+			name: "generates valid security credentials and makes the request successfully on sandbox",
 			env:  Sandbox,
 			accountBalanceReq: AccountBalanceRequest{
 				Initiator:       "testapi",
@@ -1166,7 +1208,7 @@ func TestMpesa_GetAccountBalance(t *testing.T) {
 			requestsCount: 2,
 		},
 		{
-			name: "it generates valid security credentials and makes the request successfully on production",
+			name: "generates valid security credentials and makes the request successfully on production",
 			env:  Production,
 			accountBalanceReq: AccountBalanceRequest{
 				Initiator:       "testapi",
