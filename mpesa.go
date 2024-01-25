@@ -65,13 +65,14 @@ type Mpesa struct {
 	consumerKey    string
 	consumerSecret string
 
-	authURL         string
-	b2cURL          string
-	c2bURL          string
-	dynamicQRURL    string
-	stkPushQueryURL string
-	stkPushURL      string
-	txnStatusURL    string
+	authURL           string
+	accountBalanceURL string
+	b2cURL            string
+	c2bURL            string
+	dynamicQRURL      string
+	stkPushQueryURL   string
+	stkPushURL        string
+	txnStatusURL      string
 }
 
 var (
@@ -119,13 +120,14 @@ func NewApp(c HttpClient, consumerKey, consumerSecret string, env Environment) *
 		consumerKey:    consumerKey,
 		consumerSecret: consumerSecret,
 
-		authURL:         baseUrl + `/oauth/v1/generate?grant_type=client_credentials`,
-		b2cURL:          baseUrl + `/mpesa/b2c/v1/paymentrequest`,
-		c2bURL:          baseUrl + `/mpesa/c2b/v1/registerurl`,
-		dynamicQRURL:    baseUrl + `/mpesa/qrcode/v1/generate`,
-		stkPushQueryURL: baseUrl + `/mpesa/stkpushquery/v1/query`,
-		stkPushURL:      baseUrl + `/mpesa/stkpush/v1/processrequest`,
-		txnStatusURL:    baseUrl + `/mpesa/transactionstatus/v1/query`,
+		authURL:           baseUrl + `/oauth/v1/generate?grant_type=client_credentials`,
+		accountBalanceURL: baseUrl + `/mpesa/accountbalance/v1/query`,
+		b2cURL:            baseUrl + `/mpesa/b2c/v1/paymentrequest`,
+		c2bURL:            baseUrl + `/mpesa/c2b/v1/registerurl`,
+		dynamicQRURL:      baseUrl + `/mpesa/qrcode/v1/generate`,
+		stkPushQueryURL:   baseUrl + `/mpesa/stkpushquery/v1/query`,
+		stkPushURL:        baseUrl + `/mpesa/stkpush/v1/processrequest`,
+		txnStatusURL:      baseUrl + `/mpesa/transactionstatus/v1/query`,
 	}
 }
 
@@ -324,14 +326,14 @@ func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*
 	return &resp, nil
 }
 
-// UnmarshalB2CCallback decodes the provided value to B2CCallback
-func UnmarshalB2CCallback(in interface{}) (*B2CCallback, error) {
+// UnmarshalCallback decodes the provided value to Callback
+func UnmarshalCallback(in interface{}) (*Callback, error) {
 	b, err := toBytes(in)
 	if err != nil {
 		return nil, fmt.Errorf("mpesa: error unmarshing input - %v", err)
 	}
 
-	var callback B2CCallback
+	var callback Callback
 	if err := json.Unmarshal(b, &callback); err != nil {
 		return nil, fmt.Errorf("mpesa: error unmarshling stk push callback - %v", err)
 	}
@@ -510,6 +512,54 @@ func (m *Mpesa) GetTransactionStatus(
 		return nil, fmt.Errorf(
 			"mpesa: transaction status request ID %v failed with error code %v: %v",
 			resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
+		)
+	}
+
+	return &resp, nil
+}
+
+// GetAccountBalance fetches the account balance of a short code. This can be used for both B2C, buy goods and pay bill
+// accounts.
+func (m *Mpesa) GetAccountBalance(
+	ctx context.Context, initiatorPwd string, req AccountBalanceRequest,
+) (*GeneralRequestResponse, error) {
+	if initiatorPwd == "" {
+		return nil, ErrInvalidInitiatorPassword
+	}
+
+	if err := validateURL(req.QueueTimeOutURL); err != nil {
+		return nil, err
+	}
+
+	if err := validateURL(req.ResultURL); err != nil {
+		return nil, err
+	}
+
+	securityCredential, err := m.generateSecurityCredentials(initiatorPwd)
+	if err != nil {
+		return nil, err
+	}
+
+	req.SecurityCredential = securityCredential
+	req.CommandID = AccountBalance
+	req.IdentifierType = Shortcode
+
+	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.accountBalanceURL, req)
+	if err != nil {
+		return nil, err
+	}
+
+	//goland:noinspection GoUnhandledErrorResult
+	defer res.Body.Close()
+
+	var resp GeneralRequestResponse
+	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
+		return nil, fmt.Errorf("mpesa: decode response: %v", err)
+	}
+
+	if resp.ErrorCode != "" {
+		return nil, fmt.Errorf(
+			"mpesa: request %v failed with code %v: %v", resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
 		)
 	}
 

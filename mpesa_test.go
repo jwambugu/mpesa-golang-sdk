@@ -477,15 +477,16 @@ func TestMpesa_B2C(t *testing.T) {
 	}
 }
 
-func TestUnmarshalB2CCallback(t *testing.T) {
+func TestUnmarshalCallback(t *testing.T) {
 	asserts := assert.New(t)
 
 	tests := []struct {
-		name  string
-		input interface{}
+		name           string
+		input          interface{}
+		wantResultCode int
 	}{
 		{
-			name: "it can unmarshal a successful transaction callback string",
+			name: "it can unmarshal a successful b2c callback string",
 			input: `
 			{    
 			   "Result": {
@@ -539,36 +540,77 @@ func TestUnmarshalB2CCallback(t *testing.T) {
 				  }
 			   }
 			}`,
+			wantResultCode: 0,
 		},
 		{
-			name: "it can unmarshal an unsuccessful transaction callback struct",
-			input: B2CCallback{
-				Result: B2CCallbackResult{
+			name: "it can unmarshal an unsuccessful request callback struct",
+			input: Callback{
+				Result: CallbackResult{
 					ResultType:               0,
-					ResultCode:               0,
+					ResultCode:               2001,
 					ResultDesc:               "The initiator information is invalid.",
-					OriginatorConversationID: "29112-34801843-1",
+					OriginatorConversationID: "10571-7910404-1",
 					ConversationID:           "AG_20191219_00004e48cf7e3533f581",
 					TransactionID:            "NLJ41HAY6Q",
-					ReferenceData: B2CReferenceData{
-						ReferenceItem: B2CReferenceItem{
+					ReferenceData: ReferenceData{
+						ReferenceItem: ReferenceItem{
 							Key:   "QueueTimeoutURL",
 							Value: "https:\\/\\/internalsandbox.safaricom.co.ke\\/mpesa\\/b2cresults\\/v1\\/submit",
 						},
 					},
 				},
 			},
+			wantResultCode: 2001,
+		},
+		{
+			name: "it can unmarshal a successfull account balance request callback",
+			input: `
+			{
+			  "Result": {
+				"ResultType": 0,
+				"ResultCode": 0,
+				"ResultDesc": "The service request is processed successfully.",
+				"OriginatorConversationID": "10571-7910404-1",
+				"ConversationID": "AG_20191219_00004e48cf7e3533f581",
+				"TransactionID": "SAO0000000",
+				"ResultParameters": {
+				  "ResultParameter": [
+					{
+					  "Key": "ActionType",
+					  "Value": "AccountBalance"
+					},
+					{
+					  "Key": "AccountBalance",
+					  "Value": "Working Account|KES|0.00|0.00|0.00|0.00&Utility Account|KES|0.00|0.00|0.00|0.00&Charges Paid Account|KES|0.00|0.00|0.00|0.00&Organization Settlement Account|KES|0.00|0.00|0.00|0.00"
+					},
+					{
+					  "Key": "BOCompletedTime",
+					  "Value": 20240124163140
+					}
+				  ]
+				},
+				"ReferenceData": {
+				  "ReferenceItem": {
+					"Key": "QueueTimeoutURL",
+					"Value": "https:\/\/internalapi.safaricom.co.ke\/mpesa\/abresults\/v1\/submit"
+				  }
+				}
+			  }
+			}`,
+			wantResultCode: 0,
 		},
 	}
 
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			callback, err := UnmarshalB2CCallback(tc.input)
+			callback, err := UnmarshalCallback(tc.input)
 			asserts.NoError(err)
 			asserts.NotNil(callback)
 			asserts.Equal("AG_20191219_00004e48cf7e3533f581", callback.Result.ConversationID)
+			asserts.Equal("10571-7910404-1", callback.Result.OriginatorConversationID)
 			asserts.Equal("QueueTimeoutURL", callback.Result.ReferenceData.ReferenceItem.Key)
+			asserts.Equal(tc.wantResultCode, callback.Result.ResultCode)
 		})
 	}
 }
@@ -1044,7 +1086,7 @@ func TestMpesa_GetTransactionStatus(t *testing.T) {
 			requestsCount: 1,
 		},
 		{
-			name: "request fails if invalid queue timeout URL is passed",
+			name: "request fails if invalid result URL is passed",
 			txnStatusReq: TransactionStatusRequest{
 				QueueTimeOutURL: "https://example.com",
 				ResultURL:       "http://example.com",
@@ -1106,6 +1148,186 @@ func TestMpesa_GetTransactionStatus(t *testing.T) {
 			})
 
 			tc.mock(t, app, cl, tc.txnStatusReq)
+			_, err := app.GenerateAccessToken(ctx)
+			require.NoError(t, err)
+			require.Len(t, cl.requests, tc.requestsCount)
+		})
+	}
+}
+
+func TestMpesa_GetAccountBalance(t *testing.T) {
+	var (
+		ctx              = context.Background()
+		initatorPassword = "random-string"
+	)
+
+	tests := []struct {
+		name              string
+		accountBalanceReq AccountBalanceRequest
+		env               Environment
+		mock              func(t *testing.T, app *Mpesa, c *mockHttpClient, accountBalanceReq AccountBalanceRequest)
+		requestsCount     int
+	}{
+		{
+			name: "generates valid security credentials and makes the request successfully on sandbox",
+			env:  Sandbox,
+			accountBalanceReq: AccountBalanceRequest{
+				Initiator:       "testapi",
+				PartyA:          600981,
+				QueueTimeOutURL: "https://example.com",
+				Remarks:         "Test Local",
+				ResultURL:       "https://example.com",
+			},
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, accountBalanceReq AccountBalanceRequest) {
+				c.MockRequest(app.accountBalanceURL, func() (status int, body string) {
+					req := c.requests[1]
+
+					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
+					wantAuthorizationHeader := `Bearer ` + app.cache[testConsumerKey].AccessToken
+					require.Equal(t, wantAuthorizationHeader, req.Header.Get("Authorization"))
+
+					var reqParams AccountBalanceRequest
+
+					err := json.NewDecoder(req.Body).Decode(&reqParams)
+					require.NoError(t, err)
+					require.NotEmpty(t, reqParams.SecurityCredential) // TODO: verify the security credential
+
+					return http.StatusOK, `{
+						"OriginatorConversationID": "2ba8-4165-beca-292db11f9ef878061",
+						"ConversationID": "AG_20240122_2010332bae9191b3d522",
+						"ResponseCode": "0",
+						"ResponseDescription": "Accept the service request successfully."
+					}`
+				})
+
+				res, err := app.GetAccountBalance(ctx, initatorPassword, accountBalanceReq)
+				require.NoError(t, err)
+				require.NotNil(t, res)
+				require.Contains(t, res.ResponseDescription, "Accept the service request successfully")
+			},
+			requestsCount: 2,
+		},
+		{
+			name: "generates valid security credentials and makes the request successfully on production",
+			env:  Production,
+			accountBalanceReq: AccountBalanceRequest{
+				Initiator:       "testapi",
+				PartyA:          600981,
+				QueueTimeOutURL: "https://example.com",
+				Remarks:         "Test Local",
+				ResultURL:       "https://example.com",
+			},
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, accountBalanceReq AccountBalanceRequest) {
+				c.MockRequest(app.accountBalanceURL, func() (status int, body string) {
+					req := c.requests[1]
+
+					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
+					wantAuthorizationHeader := `Bearer ` + app.cache[testConsumerKey].AccessToken
+					require.Equal(t, wantAuthorizationHeader, req.Header.Get("Authorization"))
+
+					var reqParams AccountBalanceRequest
+
+					err := json.NewDecoder(req.Body).Decode(&reqParams)
+					require.NoError(t, err)
+					require.NotEmpty(t, reqParams.SecurityCredential) // TODO: verify the security credential
+
+					return http.StatusOK, `{
+						"OriginatorConversationID": "2ba8-4165-beca-292db11f9ef878061",
+						"ConversationID": "AG_20240122_2010332bae9191b3d522",
+						"ResponseCode": "0",
+						"ResponseDescription": "Accept the service request successfully."
+					}`
+				})
+
+				res, err := app.GetAccountBalance(ctx, initatorPassword, accountBalanceReq)
+				require.NoError(t, err)
+				require.NotNil(t, res)
+				require.Contains(t, res.ResponseDescription, "Accept the service request successfully")
+			},
+			requestsCount: 2,
+		},
+		{
+			name: "request fails if no initiator password is provided",
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, accountBalanceReq AccountBalanceRequest) {
+				res, err := app.GetAccountBalance(ctx, "", accountBalanceReq)
+				require.NotNil(t, err)
+				require.EqualError(t, err, ErrInvalidInitiatorPassword.Error())
+				require.Nil(t, res)
+			},
+			requestsCount: 1,
+		},
+		{
+			name:              "request fails if invalid queue timeout URL is passed",
+			accountBalanceReq: AccountBalanceRequest{QueueTimeOutURL: "http://example.com"},
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, accountBalanceReq AccountBalanceRequest) {
+				res, err := app.GetAccountBalance(ctx, initatorPassword, accountBalanceReq)
+				require.NotNil(t, err)
+				require.Contains(t, err.Error(), "must use \"https\"")
+				require.Nil(t, res)
+			},
+			requestsCount: 1,
+		},
+		{
+			name: "request fails if invalid result URL is passed",
+			accountBalanceReq: AccountBalanceRequest{
+				QueueTimeOutURL: "https://example.com",
+				ResultURL:       "http://example.com",
+			},
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, accountBalanceReq AccountBalanceRequest) {
+				res, err := app.GetAccountBalance(ctx, initatorPassword, accountBalanceReq)
+				require.NotNil(t, err)
+				require.Contains(t, err.Error(), "must use \"https\"")
+				require.Nil(t, res)
+			},
+			requestsCount: 1,
+		},
+		{
+			name: "request fails with an error code",
+			accountBalanceReq: AccountBalanceRequest{
+				Initiator:       "testapi",
+				PartyA:          600981,
+				QueueTimeOutURL: "https://example.com",
+				Remarks:         "Test Local",
+				ResultURL:       "https://example.com",
+			},
+			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, accountBalanceReq AccountBalanceRequest) {
+				c.MockRequest(app.accountBalanceURL, func() (status int, body string) {
+					return http.StatusBadRequest, `
+					{    
+					   "requestId": "11728-2929992-1",
+					   "errorCode": "401.002.01",
+					   "errorMessage": "Error Occurred - Invalid Access Token - BJGFGOXv5aZnw90KkA4TDtu4Xdyf"
+					}`
+				})
+
+				res, err := app.GetAccountBalance(ctx, initatorPassword, accountBalanceReq)
+				require.NotNil(t, err)
+				require.Nil(t, res)
+				require.Contains(t, err.Error(), "401.002.01")
+			},
+			requestsCount: 2,
+		},
+	}
+
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			var (
+				cl  = newMockHttpClient()
+				app = NewApp(cl, testConsumerKey, testConsumerSecret, tc.env)
+			)
+
+			cl.MockRequest(app.authURL, func() (status int, body string) {
+				return http.StatusOK, `
+				{
+					"access_token": "0A0v8OgxqqoocblflR58m9chMdnU",
+					"expires_in": "3599"
+				}`
+			})
+
+			tc.mock(t, app, cl, tc.accountBalanceReq)
 			_, err := app.GenerateAccessToken(ctx)
 			require.NoError(t, err)
 			require.Len(t, cl.requests, tc.requestsCount)
