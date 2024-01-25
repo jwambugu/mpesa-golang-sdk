@@ -97,8 +97,8 @@ type (
 		TransactionDesc string `json:"TransactionDesc"`
 	}
 
-	// GeneralRequestResponse is the response sent back by mpesa after initiating a request.
-	GeneralRequestResponse struct {
+	// GeneralResponse is the response sent back by mpesa after initiating a request.
+	GeneralResponse struct {
 		// CheckoutRequestID is a global unique identifier of the processed checkout transaction request.
 		// Example: ws_CO_DMZ_12321_23423476
 		CheckoutRequestID string `json:"CheckoutRequestID,omitempty"`
@@ -158,11 +158,11 @@ type (
 
 	STKCallback struct {
 		// MerchantRequestID is a global unique Identifier for any submitted payment request. It is the same
-		// value returned to the acknowledgement message on the GeneralRequestResponse.
+		// value returned to the acknowledgement message on the GeneralResponse.
 		MerchantRequestID string `json:"MerchantRequestID"`
 
 		// CheckoutRequestID is a global unique identifier of the processed checkout transaction request.
-		// It is the same value returned to the acknowledgement message on the GeneralRequestResponse.
+		// It is the same value returned to the acknowledgement message on the GeneralResponse.
 		CheckoutRequestID string `json:"CheckoutRequestID"`
 
 		// ResultCode is a numeric status code that indicates the status of the transaction processing.

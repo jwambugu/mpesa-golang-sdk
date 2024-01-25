@@ -126,7 +126,7 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 
 			var (
 				cl  = newMockHttpClient()
-				app = NewApp(cl, testConsumerKey, testConsumerSecret, Sandbox)
+				app = NewApp(cl, testConsumerKey, testConsumerSecret, EnvironmentSandbox)
 			)
 
 			tc.mock(t, app, cl)
@@ -235,7 +235,7 @@ func TestMpesa_STKPush(t *testing.T) {
 
 			var (
 				cl  = newMockHttpClient()
-				app = NewApp(cl, testConsumerKey, testConsumerSecret, Sandbox)
+				app = NewApp(cl, testConsumerKey, testConsumerSecret, EnvironmentSandbox)
 			)
 
 			cl.MockRequest(app.authURL, func() (status int, body string) {
@@ -350,7 +350,7 @@ func TestMpesa_B2C(t *testing.T) {
 				ResultURL:       "https://example.com",
 				Occasion:        "Test Occasion",
 			},
-			env: Sandbox,
+			env: EnvironmentSandbox,
 			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, b2cReq B2CRequest) {
 				c.MockRequest(app.b2cURL, func() (status int, body string) {
 					req := c.requests[1]
@@ -393,7 +393,7 @@ func TestMpesa_B2C(t *testing.T) {
 				ResultURL:       "https://example.com",
 				Occasion:        "Test Occasion",
 			},
-			env: Production,
+			env: EnvironmentProduction,
 			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, b2cReq B2CRequest) {
 				c.MockRequest(app.b2cURL, func() (status int, body string) {
 					req := c.requests[1]
@@ -431,7 +431,7 @@ func TestMpesa_B2C(t *testing.T) {
 				ResultURL:       "https://example.com",
 				Occasion:        "Test Occasion",
 			},
-			env: Production,
+			env: EnvironmentProduction,
 			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, b2cReq B2CRequest) {
 				c.MockRequest(app.b2cURL, func() (status int, body string) {
 					return http.StatusBadRequest, `
@@ -682,7 +682,7 @@ func TestMpesa_STKPushQuery(t *testing.T) {
 
 				res, err := app.STKQuery(ctx, passkey, stkReq)
 				asserts.Error(err)
-				asserts.Contains(err.Error(), "error code 500.001.1001:The transaction is being processed")
+				asserts.Contains(err.Error(), "code 500.001.1001: The transaction is being processed")
 				asserts.Nil(res)
 			},
 		},
@@ -694,7 +694,7 @@ func TestMpesa_STKPushQuery(t *testing.T) {
 			t.Parallel()
 
 			cl := newMockHttpClient()
-			app := NewApp(cl, testConsumerKey, testConsumerSecret, Sandbox)
+			app := NewApp(cl, testConsumerKey, testConsumerSecret, EnvironmentSandbox)
 
 			cl.MockRequest(app.authURL, func() (status int, body string) {
 				return http.StatusOK, `
@@ -729,7 +729,7 @@ func Test_RegisterC2BURL(t *testing.T) {
 	}{
 		{
 			name: "it should register URLs in sanbox",
-			env:  Sandbox,
+			env:  EnvironmentSandbox,
 			c2bRequest: RegisterC2BURLRequest{
 				ShortCode:       600638,
 				ResponseType:    "Completed",
@@ -764,7 +764,7 @@ func Test_RegisterC2BURL(t *testing.T) {
 		},
 		{
 			name: "it should register URLs in production",
-			env:  Production,
+			env:  EnvironmentProduction,
 			c2bRequest: RegisterC2BURLRequest{
 				ShortCode:       200200,
 				ResponseType:    "Canceled",
@@ -944,7 +944,7 @@ func TestMpesa_DynamicQR(t *testing.T) {
 
 			var (
 				cl  = newMockHttpClient()
-				app = NewApp(cl, testConsumerKey, testConsumerSecret, Sandbox)
+				app = NewApp(cl, testConsumerKey, testConsumerSecret, EnvironmentSandbox)
 			)
 
 			cl.MockRequest(app.authURL, func() (status int, body string) {
@@ -984,7 +984,7 @@ func TestMpesa_GetTransactionStatus(t *testing.T) {
 	}{
 		{
 			name: "it generates valid security credentials and makes the request successfully on sandbox",
-			env:  Sandbox,
+			env:  EnvironmentSandbox,
 			txnStatusReq: TransactionStatusRequest{
 				Initiator:       "testapi",
 				Occasion:        "Test",
@@ -1025,7 +1025,7 @@ func TestMpesa_GetTransactionStatus(t *testing.T) {
 		},
 		{
 			name: "it generates valid security credentials and makes the request successfully on production",
-			env:  Production,
+			env:  EnvironmentProduction,
 			txnStatusReq: TransactionStatusRequest{
 				Initiator:       "testapi",
 				Occasion:        "Test",
@@ -1170,7 +1170,7 @@ func TestMpesa_GetAccountBalance(t *testing.T) {
 	}{
 		{
 			name: "generates valid security credentials and makes the request successfully on sandbox",
-			env:  Sandbox,
+			env:  EnvironmentSandbox,
 			accountBalanceReq: AccountBalanceRequest{
 				Initiator:       "testapi",
 				PartyA:          600981,
@@ -1209,7 +1209,7 @@ func TestMpesa_GetAccountBalance(t *testing.T) {
 		},
 		{
 			name: "generates valid security credentials and makes the request successfully on production",
-			env:  Production,
+			env:  EnvironmentProduction,
 			accountBalanceReq: AccountBalanceRequest{
 				Initiator:       "testapi",
 				PartyA:          600981,
