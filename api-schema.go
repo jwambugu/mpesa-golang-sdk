@@ -18,7 +18,7 @@ const (
 type CommandID string
 
 const (
-	// AccountBalance command ID is applied when getting the saccount balance of a shortcode
+	// AccountBalance command ID is applied when getting the account balance of a shortcode
 	AccountBalance CommandID = "AccountBalance"
 
 	// BusinessPayment is a normal business to customer payment, supports only M-PESA registered customers.
