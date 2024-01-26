@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/require"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -262,11 +263,12 @@ func TestUnmarshalSTKPushCallback(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		input interface{}
+		input func(t *testing.T) io.Reader
 	}{
 		{
 			name: "it can unmarshal a successful transaction callback string",
-			input: `{
+			input: func(_ *testing.T) io.Reader {
+				return strings.NewReader(`{
 			   "Body":{
 				  "stkCallback":{
 					 "MerchantRequestID":"29115-34620561-1",
@@ -295,19 +297,27 @@ func TestUnmarshalSTKPushCallback(t *testing.T) {
 					 }
 				  }
 			   }
-			}`,
+			}`)
+			},
 		},
 		{
 			name: "it can unmarshal an unsuccessful transaction callback struct",
-			input: STKPushCallback{
-				Body: STKPushCallbackBody{
-					STKCallback: STKCallback{
-						MerchantRequestID: "29115-34620561-1",
-						CheckoutRequestID: "ws_CO_191220191020363925",
-						ResultCode:        1032,
-						ResultDesc:        "Request cancelled by user.",
+			input: func(t *testing.T) io.Reader {
+				callback := STKPushCallback{
+					Body: STKPushCallbackBody{
+						STKCallback: STKCallback{
+							MerchantRequestID: "29115-34620561-1",
+							CheckoutRequestID: "ws_CO_191220191020363925",
+							ResultCode:        1032,
+							ResultDesc:        "Request cancelled by user.",
+						},
 					},
-				},
+				}
+
+				b, err := json.Marshal(callback)
+				require.NoError(t, err)
+
+				return strings.NewReader(string(b))
 			},
 		},
 	}
@@ -317,7 +327,7 @@ func TestUnmarshalSTKPushCallback(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			callback, err := UnmarshalSTKPushCallback(tc.input)
+			callback, err := UnmarshalSTKPushCallback(tc.input(t))
 			asserts.NoError(err)
 			asserts.NotNil(callback)
 			asserts.Equal("ws_CO_191220191020363925", callback.Body.STKCallback.CheckoutRequestID)
@@ -482,12 +492,13 @@ func TestUnmarshalCallback(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		input          interface{}
+		input          func(t *testing.T) io.Reader
 		wantResultCode int
 	}{
 		{
 			name: "it can unmarshal a successful b2c callback string",
-			input: `
+			input: func(t *testing.T) io.Reader {
+				return strings.NewReader(`
 			{    
 			   "Result": {
 				  "ResultType": 0,
@@ -539,32 +550,41 @@ func TestUnmarshalCallback(t *testing.T) {
 					  }
 				  }
 			   }
-			}`,
+			}`)
+			},
 			wantResultCode: 0,
 		},
 		{
 			name: "it can unmarshal an unsuccessful request callback struct",
-			input: Callback{
-				Result: CallbackResult{
-					ResultType:               0,
-					ResultCode:               2001,
-					ResultDesc:               "The initiator information is invalid.",
-					OriginatorConversationID: "10571-7910404-1",
-					ConversationID:           "AG_20191219_00004e48cf7e3533f581",
-					TransactionID:            "NLJ41HAY6Q",
-					ReferenceData: ReferenceData{
-						ReferenceItem: ReferenceItem{
-							Key:   "QueueTimeoutURL",
-							Value: "https:\\/\\/internalsandbox.safaricom.co.ke\\/mpesa\\/b2cresults\\/v1\\/submit",
+			input: func(t *testing.T) io.Reader {
+				callback := Callback{
+					Result: CallbackResult{
+						ResultType:               0,
+						ResultCode:               2001,
+						ResultDesc:               "The initiator information is invalid.",
+						OriginatorConversationID: "10571-7910404-1",
+						ConversationID:           "AG_20191219_00004e48cf7e3533f581",
+						TransactionID:            "NLJ41HAY6Q",
+						ReferenceData: ReferenceData{
+							ReferenceItem: ReferenceItem{
+								Key:   "QueueTimeoutURL",
+								Value: "https:\\/\\/internalsandbox.safaricom.co.ke\\/mpesa\\/b2cresults\\/v1\\/submit",
+							},
 						},
 					},
-				},
+				}
+
+				b, err := json.Marshal(callback)
+				require.NoError(t, err)
+
+				return strings.NewReader(string(b))
 			},
 			wantResultCode: 2001,
 		},
 		{
 			name: "it can unmarshal a successfull account balance request callback",
-			input: `
+			input: func(t *testing.T) io.Reader {
+				return strings.NewReader(`
 			{
 			  "Result": {
 				"ResultType": 0,
@@ -596,7 +616,8 @@ func TestUnmarshalCallback(t *testing.T) {
 				  }
 				}
 			  }
-			}`,
+			}`)
+			},
 			wantResultCode: 0,
 		},
 	}
@@ -604,7 +625,7 @@ func TestUnmarshalCallback(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			callback, err := UnmarshalCallback(tc.input)
+			callback, err := UnmarshalCallback(tc.input(t))
 			asserts.NoError(err)
 			asserts.NotNil(callback)
 			asserts.Equal("AG_20191219_00004e48cf7e3533f581", callback.Result.ConversationID)

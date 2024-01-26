@@ -250,15 +250,10 @@ func (m *Mpesa) STKPush(ctx context.Context, passkey string, req STKPushRequest)
 }
 
 // UnmarshalSTKPushCallback decodes the provided value to STKPushCallback.
-func UnmarshalSTKPushCallback(in interface{}) (*STKPushCallback, error) {
-	b, err := toBytes(in)
-	if err != nil {
-		return nil, fmt.Errorf("mpesa: parse input: %v", err)
-	}
-
+func UnmarshalSTKPushCallback(r io.Reader) (*STKPushCallback, error) {
 	var callback STKPushCallback
-	if err = json.Unmarshal(b, &callback); err != nil {
-		return nil, fmt.Errorf("mpesa: unmarshal: %v", err)
+	if err := json.NewDecoder(r).Decode(&callback); err != nil {
+		return nil, fmt.Errorf("mpesa: decode: %v", err)
 	}
 
 	return &callback, nil
@@ -329,15 +324,10 @@ func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*
 }
 
 // UnmarshalCallback decodes the provided value to Callback
-func UnmarshalCallback(in interface{}) (*Callback, error) {
-	b, err := toBytes(in)
-	if err != nil {
-		return nil, fmt.Errorf("mpesa: parse input : %v", err)
-	}
-
+func UnmarshalCallback(r io.Reader) (*Callback, error) {
 	var callback Callback
-	if err := json.Unmarshal(b, &callback); err != nil {
-		return nil, fmt.Errorf("mpesa: unmarshal: %v", err)
+	if err := json.NewDecoder(r).Decode(&callback); err != nil {
+		return nil, fmt.Errorf("mpesa: decode: %v", err)
 	}
 
 	return &callback, nil
