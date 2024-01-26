@@ -341,7 +341,7 @@ type (
 		//your endpoint is unreachable or is unable to respond on time. Only two values are allowed: Completed or Cancelled.
 		// Completed means M-PESA will automatically complete your transaction, whereas Cancelled means M-PESA will
 		// automatically cancel the transaction, in the event M-PESA is unable to reach your Validation URL.
-		ResponseType string `json:"ResponseType"`
+		ResponseType ResponseType `json:"ResponseType"`
 
 		// ConfirmationURL is the URL that receives the confirmation request from API upon payment completion.
 		ConfirmationURL string `json:"ConfirmationURL"`

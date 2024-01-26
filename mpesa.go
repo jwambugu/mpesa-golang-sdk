@@ -33,9 +33,13 @@ type cache map[string]AuthorizationResponse
 const (
 	EnvironmentSandbox Environment = iota
 	EnvironmentProduction
+)
 
-	ResponseTypeComplete string = "Completed"
-	ResponseTypeCanceled string = "Canceled"
+type ResponseType string
+
+const (
+	ResponseTypeCanceled ResponseType = "Canceled"
+	ResponseTypeComplete ResponseType = "Completed"
 )
 
 var accessTokenTTL = 55 * time.Minute
