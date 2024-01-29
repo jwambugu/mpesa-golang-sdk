@@ -244,7 +244,7 @@ func (m *Mpesa) STKPush(ctx context.Context, passkey string, req STKPushRequest)
 		return nil, fmt.Errorf("mpesa: decode response : %v", err)
 	}
 
-	if resp.ErrorCode != "" {
+	if res.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf(
 			"mpesa: request %v failed with code %v: %v", resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
 		)
@@ -318,7 +318,7 @@ func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*
 		return nil, fmt.Errorf("mpesa: decode response: %v", err)
 	}
 
-	if resp.ErrorCode != "" {
+	if res.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf(
 			"mpesa: request %v failed with code %v: %v", resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
 		)
@@ -358,7 +358,7 @@ func (m *Mpesa) STKQuery(ctx context.Context, passkey string, req STKQueryReques
 		return nil, fmt.Errorf("mpesa: decode response: %v", err)
 	}
 
-	if resp.ErrorCode != "" {
+	if res.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf(
 			"mpesa: request %v failed with code %v: %v", resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
 		)
@@ -418,7 +418,7 @@ func (m *Mpesa) DynamicQR(
 		return nil, fmt.Errorf("mpesa: decode response: %v", err)
 	}
 
-	if resp.ErrorCode != "" {
+	if res.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf(
 			"mpesa: request %v failed with code %v: %v", resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
 		)
@@ -503,7 +503,7 @@ func (m *Mpesa) GetTransactionStatus(
 		return nil, fmt.Errorf("mpesa: decode response: %v", err)
 	}
 
-	if resp.ErrorCode != "" {
+	if res.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf(
 			"mpesa: request %v failed with code %v: %v", resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
 		)
@@ -551,7 +551,7 @@ func (m *Mpesa) GetAccountBalance(
 		return nil, fmt.Errorf("mpesa: decode response: %v", err)
 	}
 
-	if resp.ErrorCode != "" {
+	if res.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf(
 			"mpesa: request %v failed with code %v: %v", resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
 		)
