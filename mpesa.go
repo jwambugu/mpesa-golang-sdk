@@ -47,9 +47,23 @@ var accessTokenTTL = 55 * time.Minute
 // requiredURLScheme present the required scheme for the callbacks
 const requiredURLScheme = "https"
 
+const (
+	sandboxBaseURL    = "https://sandbox.safaricom.co.ke"
+	productionBaseURL = "https://api.safaricom.co.ke"
+)
+
 // IsProduction returns true if the current env is set to production.
 func (e Environment) IsProduction() bool {
 	return e == EnvironmentProduction
+}
+
+// BaseURL returns the base url for the current Environment
+func (e Environment) BaseURL() string {
+	if !e.IsProduction() {
+		return sandboxBaseURL
+	}
+
+	return productionBaseURL
 }
 
 type HttpClient interface {
@@ -68,15 +82,6 @@ type Mpesa struct {
 
 	consumerKey    string
 	consumerSecret string
-
-	authURL           string
-	accountBalanceURL string
-	b2cURL            string
-	c2bURL            string
-	dynamicQRURL      string
-	stkPushQueryURL   string
-	stkPushURL        string
-	txnStatusURL      string
 }
 
 var (
@@ -85,11 +90,6 @@ var (
 
 	// ErrInvalidInitiatorPassword indicates that no initiator password was provided.
 	ErrInvalidInitiatorPassword = errors.New("mpesa: initiator password cannot be empty")
-)
-
-const (
-	sandboxBaseURL    = "https://sandbox.safaricom.co.ke"
-	productionBaseURL = "https://api.safaricom.co.ke"
 )
 
 // validateURL checks if the provided URL is valid and is being server via https
@@ -114,11 +114,6 @@ func NewApp(c HttpClient, consumerKey, consumerSecret string, env Environment) *
 		}
 	}
 
-	baseUrl := sandboxBaseURL
-	if env == EnvironmentProduction {
-		baseUrl = productionBaseURL
-	}
-
 	return &Mpesa{
 		client:      c,
 		environment: env,
@@ -126,16 +121,47 @@ func NewApp(c HttpClient, consumerKey, consumerSecret string, env Environment) *
 
 		consumerKey:    consumerKey,
 		consumerSecret: consumerSecret,
-
-		authURL:           baseUrl + `/oauth/v1/generate?grant_type=client_credentials`,
-		accountBalanceURL: baseUrl + `/mpesa/accountbalance/v1/query`,
-		b2cURL:            baseUrl + `/mpesa/b2c/v1/paymentrequest`,
-		c2bURL:            baseUrl + `/mpesa/c2b/v1/registerurl`,
-		dynamicQRURL:      baseUrl + `/mpesa/qrcode/v1/generate`,
-		stkPushQueryURL:   baseUrl + `/mpesa/stkpushquery/v1/query`,
-		stkPushURL:        baseUrl + `/mpesa/stkpush/v1/processrequest`,
-		txnStatusURL:      baseUrl + `/mpesa/transactionstatus/v1/query`,
 	}
+}
+
+// endpointAuth returns the auth endpoint prefixed with the current Environment base URL
+func (m *Mpesa) endpointAuth() string {
+	return m.Environment().BaseURL() + `/oauth/v1/generate?grant_type=client_credentials`
+}
+
+// endpointB2C returns the account balance endpoint prefixed with the current Environment base URL
+func (m *Mpesa) endpointAccountBalance() string {
+	return m.Environment().BaseURL() + `/mpesa/accountbalance/v1/query`
+}
+
+// endpointB2C returns the B2C endpoint prefixed with the current Environment base URL
+func (m *Mpesa) endpointB2C() string {
+	return m.Environment().BaseURL() + `/mpesa/b2c/v1/paymentrequest`
+}
+
+// endpointB2C returns the endpoint to register C2B callbacks prefixed with the current Environment base URL
+func (m *Mpesa) endpointC2BRegister() string {
+	return m.Environment().BaseURL() + `/mpesa/c2b/v1/registerurl`
+}
+
+// endpointB2C returns the endpoint to generate dunamic QR code prefixed with the current Environment base URL
+func (m *Mpesa) endpointDynamicQR() string {
+	return m.Environment().BaseURL() + `/mpesa/qrcode/v1/generate`
+}
+
+// endpointSTK returns the endpoint to generate an STK push prefixed with the current Environment base URL
+func (m *Mpesa) endpointSTK() string {
+	return m.Environment().BaseURL() + `/mpesa/stkpush/v1/processrequest`
+}
+
+// endpointSTK returns the endpoint to query the status of an STK request prefixed with the current Environment base URL
+func (m *Mpesa) endpointSTKQuery() string {
+	return m.Environment().BaseURL() + `/mpesa/stkpushquery/v1/query`
+}
+
+// endpointSTK returns the endpoint to query the status of a transaction prefixed with the current Environment base URL
+func (m *Mpesa) endpointTransactionStatus() string {
+	return m.Environment().BaseURL() + `/mpesa/transactionstatus/v1/query`
 }
 
 // generateTimestampAndPassword returns the current timestamp in the format YYYYMMDDHHmmss and a base64 encoded
@@ -194,7 +220,7 @@ func (m *Mpesa) GenerateAccessToken(ctx context.Context) (string, error) {
 		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, m.authURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, m.endpointAuth(), nil)
 	if err != nil {
 		return "", fmt.Errorf("mpesa: create auth request: %v", err)
 	}
@@ -231,7 +257,7 @@ func (m *Mpesa) STKPush(ctx context.Context, passkey string, req STKPushRequest)
 
 	req.Timestamp, req.Password = generateTimestampAndPassword(req.BusinessShortCode, passkey)
 
-	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.stkPushURL, req)
+	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.endpointSTK(), req)
 	if err != nil {
 		return nil, err
 	}
@@ -305,7 +331,7 @@ func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*
 
 	req.SecurityCredential = securityCredential
 
-	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.b2cURL, req)
+	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.endpointB2C(), req)
 	if err != nil {
 		return nil, err
 	}
@@ -345,7 +371,7 @@ func (m *Mpesa) STKQuery(ctx context.Context, passkey string, req STKQueryReques
 
 	req.Timestamp, req.Password = generateTimestampAndPassword(req.BusinessShortCode, passkey)
 
-	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.stkPushQueryURL, req)
+	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.endpointSTKQuery(), req)
 	if err != nil {
 		return nil, err
 	}
@@ -376,7 +402,7 @@ func (m *Mpesa) STKQuery(ctx context.Context, passkey string, req STKQueryReques
 func (m *Mpesa) RegisterC2BURL(ctx context.Context, req RegisterC2BURLRequest) (*Response, error) {
 	switch req.ResponseType {
 	case ResponseTypeComplete, ResponseTypeCanceled:
-		response, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.c2bURL, req)
+		response, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.endpointC2BRegister(), req)
 		if err != nil {
 			return nil, err
 		}
@@ -405,7 +431,7 @@ func (m *Mpesa) DynamicQR(
 ) (*DynamicQRResponse, error) {
 	req.TransactionType = transactionType
 
-	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.dynamicQRURL, req)
+	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.endpointDynamicQR(), req)
 	if err != nil {
 		return nil, err
 	}
@@ -490,7 +516,7 @@ func (m *Mpesa) GetTransactionStatus(
 	req.CommandID = TransactionStatusQuery
 	req.IdentifierType = Shortcode
 
-	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.txnStatusURL, req)
+	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.endpointTransactionStatus(), req)
 	if err != nil {
 		return nil, err
 	}
@@ -538,7 +564,7 @@ func (m *Mpesa) GetAccountBalance(
 	req.CommandID = AccountBalance
 	req.IdentifierType = Shortcode
 
-	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.accountBalanceURL, req)
+	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.endpointAccountBalance(), req)
 	if err != nil {
 		return nil, err
 	}

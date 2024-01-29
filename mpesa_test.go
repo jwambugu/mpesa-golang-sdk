@@ -33,7 +33,7 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 		{
 			name: "it generates and caches an access token successfully",
 			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient) {
-				c.MockRequest(app.authURL, func() (status int, body string) {
+				c.MockRequest(app.endpointAuth(), func() (status int, body string) {
 					return http.StatusOK, `
 						{
 						"access_token": "0A0v8OgxqqoocblflR58m9chMdnU",
@@ -55,7 +55,7 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 		{
 			name: "it fails to generate an access token",
 			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient) {
-				c.MockRequest(app.authURL, func() (status int, body string) {
+				c.MockRequest(app.endpointAuth(), func() (status int, body string) {
 					return http.StatusBadRequest, ``
 				})
 
@@ -69,7 +69,7 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient) {
 				oldToken := "0A0v8OgxqqoocblflR58m9chMdnU"
 
-				c.MockRequest(app.authURL, func() (status int, body string) {
+				c.MockRequest(app.endpointAuth(), func() (status int, body string) {
 					return http.StatusOK, `
 					{
 						"access_token": "` + oldToken + `",
@@ -88,7 +88,7 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 				gotCachedData.setAt = time.Now().Add(-1 * time.Hour)
 				app.cache[testConsumerKey] = gotCachedData
 
-				c.MockRequest(app.authURL, func() (status int, body string) {
+				c.MockRequest(app.endpointAuth(), func() (status int, body string) {
 					return http.StatusOK, `
 					{
 						"access_token": "R58m9chMdnU0A0v8Ogxqqoocblfl",
@@ -106,7 +106,7 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 		{
 			name: "it fails with 404 if invalid url is passed",
 			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient) {
-				c.MockRequest(app.stkPushURL, func() (status int, body string) {
+				c.MockRequest(app.endpointSTK(), func() (status int, body string) {
 					return http.StatusNotFound, ``
 				})
 
@@ -157,7 +157,7 @@ func TestMpesa_STKPush(t *testing.T) {
 			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, stkReq STKPushRequest) {
 				passkey := "passkey"
 
-				c.MockRequest(app.stkPushURL, func() (status int, body string) {
+				c.MockRequest(app.endpointSTK(), func() (status int, body string) {
 					req := c.requests[1]
 
 					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
@@ -208,7 +208,7 @@ func TestMpesa_STKPush(t *testing.T) {
 			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, stkReq STKPushRequest) {
 				passkey := "passkey"
 
-				c.MockRequest(app.stkPushURL, func() (status int, body string) {
+				c.MockRequest(app.endpointSTK(), func() (status int, body string) {
 					return http.StatusBadRequest, `
 						{
 							"requestId": "4788-81090592-4",
@@ -234,7 +234,7 @@ func TestMpesa_STKPush(t *testing.T) {
 				app = NewApp(cl, testConsumerKey, testConsumerSecret, EnvironmentSandbox)
 			)
 
-			cl.MockRequest(app.authURL, func() (status int, body string) {
+			cl.MockRequest(app.endpointAuth(), func() (status int, body string) {
 				return http.StatusOK, `
 				{
 					"access_token": "0A0v8OgxqqoocblflR58m9chMdnU",
@@ -353,7 +353,7 @@ func TestMpesa_B2C(t *testing.T) {
 			},
 			env: EnvironmentSandbox,
 			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, b2cReq B2CRequest) {
-				c.MockRequest(app.b2cURL, func() (status int, body string) {
+				c.MockRequest(app.endpointB2C(), func() (status int, body string) {
 					req := c.requests[1]
 
 					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
@@ -396,7 +396,7 @@ func TestMpesa_B2C(t *testing.T) {
 			},
 			env: EnvironmentProduction,
 			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, b2cReq B2CRequest) {
-				c.MockRequest(app.b2cURL, func() (status int, body string) {
+				c.MockRequest(app.endpointB2C(), func() (status int, body string) {
 					req := c.requests[1]
 
 					var reqParams B2CRequest
@@ -434,7 +434,7 @@ func TestMpesa_B2C(t *testing.T) {
 			},
 			env: EnvironmentProduction,
 			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, b2cReq B2CRequest) {
-				c.MockRequest(app.b2cURL, func() (status int, body string) {
+				c.MockRequest(app.endpointB2C(), func() (status int, body string) {
 					return http.StatusBadRequest, `
 					{    
 					   "requestId": "11728-2929992-1",
@@ -461,7 +461,7 @@ func TestMpesa_B2C(t *testing.T) {
 				app = NewApp(cl, testConsumerKey, testConsumerSecret, tc.env)
 			)
 
-			cl.MockRequest(app.authURL, func() (status int, body string) {
+			cl.MockRequest(app.endpointAuth(), func() (status int, body string) {
 				return http.StatusOK, `
 				{
 					"access_token": "0A0v8OgxqqoocblflR58m9chMdnU",
@@ -637,7 +637,7 @@ func TestMpesa_STKPushQuery(t *testing.T) {
 			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, stkReq STKQueryRequest) {
 				passkey := "passkey"
 
-				c.MockRequest(app.stkPushQueryURL, func() (status int, body string) {
+				c.MockRequest(app.endpointSTKQuery(), func() (status int, body string) {
 					req := c.requests[1]
 
 					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
@@ -678,7 +678,7 @@ func TestMpesa_STKPushQuery(t *testing.T) {
 			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, stkReq STKQueryRequest) {
 				passkey := "passkey"
 
-				c.MockRequest(app.stkPushQueryURL, func() (status int, body string) {
+				c.MockRequest(app.endpointSTKQuery(), func() (status int, body string) {
 					return http.StatusInternalServerError, `
 						{
 						  "RequestID": "ws_CO_03082022131319635708374149",
@@ -703,7 +703,7 @@ func TestMpesa_STKPushQuery(t *testing.T) {
 			cl := newMockHttpClient()
 			app := NewApp(cl, testConsumerKey, testConsumerSecret, EnvironmentSandbox)
 
-			cl.MockRequest(app.authURL, func() (status int, body string) {
+			cl.MockRequest(app.endpointAuth(), func() (status int, body string) {
 				return http.StatusOK, `
 				{
 					"access_token": "0A0v8OgxqqoocblflR58m9chMdnU",
@@ -741,7 +741,7 @@ func Test_RegisterC2BURL(t *testing.T) {
 				ConfirmationURL: "http://example.com/confirm",
 			},
 			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, c2bRequest RegisterC2BURLRequest) {
-				c.MockRequest(app.c2bURL, func() (status int, body string) {
+				c.MockRequest(app.endpointC2BRegister(), func() (status int, body string) {
 					req := c.requests[1]
 
 					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
@@ -776,7 +776,7 @@ func Test_RegisterC2BURL(t *testing.T) {
 				ConfirmationURL: "http://example.com/confirm",
 			},
 			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, c2bRequest RegisterC2BURLRequest) {
-				c.MockRequest(app.c2bURL, func() (status int, body string) {
+				c.MockRequest(app.endpointC2BRegister(), func() (status int, body string) {
 					req := c.requests[1]
 
 					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
@@ -824,7 +824,7 @@ func Test_RegisterC2BURL(t *testing.T) {
 				app    = NewApp(client, testConsumerKey, testConsumerSecret, tc.env)
 			)
 
-			client.MockRequest(app.authURL, func() (status int, body string) {
+			client.MockRequest(app.endpointAuth(), func() (status int, body string) {
 				return http.StatusOK, `
 				{
 					"access_token": "0A0v8OgxqqoocblflR58m9chMdnU",
@@ -850,7 +850,7 @@ func TestMpesa_DynamicQR(t *testing.T) {
 		{
 			name: "it makes a request and generates a qr code",
 			mock: func(app *Mpesa, c *mockHttpClient, qrReq DynamicQRRequest) {
-				c.MockRequest(app.dynamicQRURL, func() (status int, body string) {
+				c.MockRequest(app.endpointDynamicQR(), func() (status int, body string) {
 					req := c.requests[1]
 
 					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
@@ -874,7 +874,7 @@ func TestMpesa_DynamicQR(t *testing.T) {
 		{
 			name: "it makes a request and generates a qr code with the decode image",
 			mock: func(app *Mpesa, c *mockHttpClient, qrReq DynamicQRRequest) {
-				c.MockRequest(app.dynamicQRURL, func() (status int, body string) {
+				c.MockRequest(app.endpointDynamicQR(), func() (status int, body string) {
 					req := c.requests[1]
 
 					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
@@ -919,7 +919,7 @@ func TestMpesa_DynamicQR(t *testing.T) {
 		{
 			name: "request fails if an invalid trasaction type is passed",
 			mock: func(app *Mpesa, c *mockHttpClient, qrReq DynamicQRRequest) {
-				c.MockRequest(app.dynamicQRURL, func() (status int, body string) {
+				c.MockRequest(app.endpointDynamicQR(), func() (status int, body string) {
 					req := c.requests[1]
 
 					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
@@ -951,7 +951,7 @@ func TestMpesa_DynamicQR(t *testing.T) {
 				app = NewApp(cl, testConsumerKey, testConsumerSecret, EnvironmentSandbox)
 			)
 
-			cl.MockRequest(app.authURL, func() (status int, body string) {
+			cl.MockRequest(app.endpointAuth(), func() (status int, body string) {
 				return http.StatusOK, `
 				{
 					"access_token": "0A0v8OgxqqoocblflR58m9chMdnU",
@@ -999,7 +999,7 @@ func TestMpesa_GetTransactionStatus(t *testing.T) {
 				TransactionID:   "SAM62HFIRW",
 			},
 			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, txnStatusReq TransactionStatusRequest) {
-				c.MockRequest(app.txnStatusURL, func() (status int, body string) {
+				c.MockRequest(app.endpointTransactionStatus(), func() (status int, body string) {
 					req := c.requests[1]
 
 					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
@@ -1040,7 +1040,7 @@ func TestMpesa_GetTransactionStatus(t *testing.T) {
 				TransactionID:   "SAM62HFIRW",
 			},
 			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, txnStatusReq TransactionStatusRequest) {
-				c.MockRequest(app.txnStatusURL, func() (status int, body string) {
+				c.MockRequest(app.endpointTransactionStatus(), func() (status int, body string) {
 					req := c.requests[1]
 
 					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
@@ -1115,7 +1115,7 @@ func TestMpesa_GetTransactionStatus(t *testing.T) {
 				TransactionID:   "SAM62HFIRW",
 			},
 			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, txnStatusReq TransactionStatusRequest) {
-				c.MockRequest(app.txnStatusURL, func() (status int, body string) {
+				c.MockRequest(app.endpointTransactionStatus(), func() (status int, body string) {
 					return http.StatusBadRequest, `
 					{    
 					   "requestId": "11728-2929992-1",
@@ -1143,7 +1143,7 @@ func TestMpesa_GetTransactionStatus(t *testing.T) {
 				app = NewApp(cl, testConsumerKey, testConsumerSecret, tc.env)
 			)
 
-			cl.MockRequest(app.authURL, func() (status int, body string) {
+			cl.MockRequest(app.endpointAuth(), func() (status int, body string) {
 				return http.StatusOK, `
 				{
 					"access_token": "0A0v8OgxqqoocblflR58m9chMdnU",
@@ -1183,7 +1183,7 @@ func TestMpesa_GetAccountBalance(t *testing.T) {
 				ResultURL:       "https://example.com",
 			},
 			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, accountBalanceReq AccountBalanceRequest) {
-				c.MockRequest(app.accountBalanceURL, func() (status int, body string) {
+				c.MockRequest(app.endpointAccountBalance(), func() (status int, body string) {
 					req := c.requests[1]
 
 					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
@@ -1222,7 +1222,7 @@ func TestMpesa_GetAccountBalance(t *testing.T) {
 				ResultURL:       "https://example.com",
 			},
 			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, accountBalanceReq AccountBalanceRequest) {
-				c.MockRequest(app.accountBalanceURL, func() (status int, body string) {
+				c.MockRequest(app.endpointAccountBalance(), func() (status int, body string) {
 					req := c.requests[1]
 
 					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
@@ -1295,7 +1295,7 @@ func TestMpesa_GetAccountBalance(t *testing.T) {
 				ResultURL:       "https://example.com",
 			},
 			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, accountBalanceReq AccountBalanceRequest) {
-				c.MockRequest(app.accountBalanceURL, func() (status int, body string) {
+				c.MockRequest(app.endpointAccountBalance(), func() (status int, body string) {
 					return http.StatusBadRequest, `
 					{    
 					   "requestId": "11728-2929992-1",
@@ -1323,7 +1323,7 @@ func TestMpesa_GetAccountBalance(t *testing.T) {
 				app = NewApp(cl, testConsumerKey, testConsumerSecret, tc.env)
 			)
 
-			cl.MockRequest(app.authURL, func() (status int, body string) {
+			cl.MockRequest(app.endpointAuth(), func() (status int, body string) {
 				return http.StatusOK, `
 				{
 					"access_token": "0A0v8OgxqqoocblflR58m9chMdnU",
