@@ -1,4 +1,4 @@
-# About Mpesa Golang SDK
+# [WIP]: About Mpesa Golang SDK
 
 Mpesa Golang SDK facilitates in integrating M-pesa APIS into your go project. The following APIs are currently supported:
 
