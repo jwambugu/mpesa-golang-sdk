@@ -224,7 +224,7 @@ func (m *Mpesa) GenerateAccessToken(ctx context.Context) (string, error) {
 }
 
 // STKPush initiates online payment on behalf of a customer using STKPush.
-func (m *Mpesa) STKPush(ctx context.Context, passkey string, req STKPushRequest) (*GeneralResponse, error) {
+func (m *Mpesa) STKPush(ctx context.Context, passkey string, req STKPushRequest) (*Response, error) {
 	if passkey == "" {
 		return nil, ErrInvalidPasskey
 	}
@@ -239,7 +239,7 @@ func (m *Mpesa) STKPush(ctx context.Context, passkey string, req STKPushRequest)
 	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
-	var resp GeneralResponse
+	var resp Response
 	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
 		return nil, fmt.Errorf("mpesa: decode response : %v", err)
 	}
@@ -293,7 +293,7 @@ func (m *Mpesa) generateSecurityCredentials(initiatorPwd string) (string, error)
 }
 
 // B2C transacts between an M-Pesa short code to a phone number registered on M-Pesa
-func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*GeneralResponse, error) {
+func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*Response, error) {
 	if initiatorPwd == "" {
 		return nil, ErrInvalidInitiatorPassword
 	}
@@ -313,7 +313,7 @@ func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*
 	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
-	var resp GeneralResponse
+	var resp Response
 	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
 		return nil, fmt.Errorf("mpesa: decode response: %v", err)
 	}
@@ -338,7 +338,7 @@ func UnmarshalCallback(r io.Reader) (*Callback, error) {
 }
 
 // STKQuery checks the status of an STKPush payment.
-func (m *Mpesa) STKQuery(ctx context.Context, passkey string, req STKQueryRequest) (*GeneralResponse, error) {
+func (m *Mpesa) STKQuery(ctx context.Context, passkey string, req STKQueryRequest) (*Response, error) {
 	if passkey == "" {
 		return nil, ErrInvalidPasskey
 	}
@@ -353,7 +353,7 @@ func (m *Mpesa) STKQuery(ctx context.Context, passkey string, req STKQueryReques
 	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
-	var resp GeneralResponse
+	var resp Response
 	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
 		return nil, fmt.Errorf("mpesa: decode response: %v", err)
 	}
@@ -373,7 +373,7 @@ func (m *Mpesa) STKQuery(ctx context.Context, passkey string, req STKQueryReques
 // Validation URL: This is the URL that is only used when a Merchant (Partner) requires to validate the details of the payment before accepting.
 // For example, a bank would want to verify if an account number exists in their platform before accepting a payment from the customer.
 // Confirmation URL:  This is the URL that receives payment notification once payment has been completed successfully on M-PESA.
-func (m *Mpesa) RegisterC2BURL(ctx context.Context, req RegisterC2BURLRequest) (*GeneralResponse, error) {
+func (m *Mpesa) RegisterC2BURL(ctx context.Context, req RegisterC2BURLRequest) (*Response, error) {
 	switch req.ResponseType {
 	case ResponseTypeComplete, ResponseTypeCanceled:
 		response, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.c2bURL, req)
@@ -384,7 +384,7 @@ func (m *Mpesa) RegisterC2BURL(ctx context.Context, req RegisterC2BURLRequest) (
 			_ = body.Close()
 		}(response.Body)
 
-		var result GeneralResponse
+		var result Response
 
 		if err = json.NewDecoder(response.Body).Decode(&result); err != nil {
 			return nil, fmt.Errorf("mpesa: decode response: %v", err)
@@ -468,7 +468,7 @@ func (m *Mpesa) DynamicQR(
 // GetTransactionStatus checks the status of a transaction
 func (m *Mpesa) GetTransactionStatus(
 	ctx context.Context, initiatorPwd string, req TransactionStatusRequest,
-) (*GeneralResponse, error) {
+) (*Response, error) {
 	if initiatorPwd == "" {
 		return nil, ErrInvalidInitiatorPassword
 	}
@@ -498,7 +498,7 @@ func (m *Mpesa) GetTransactionStatus(
 	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
-	var resp GeneralResponse
+	var resp Response
 	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
 		return nil, fmt.Errorf("mpesa: decode response: %v", err)
 	}
@@ -516,7 +516,7 @@ func (m *Mpesa) GetTransactionStatus(
 // accounts.
 func (m *Mpesa) GetAccountBalance(
 	ctx context.Context, initiatorPwd string, req AccountBalanceRequest,
-) (*GeneralResponse, error) {
+) (*Response, error) {
 	if initiatorPwd == "" {
 		return nil, ErrInvalidInitiatorPassword
 	}
@@ -546,7 +546,7 @@ func (m *Mpesa) GetAccountBalance(
 	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
-	var resp GeneralResponse
+	var resp Response
 	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
 		return nil, fmt.Errorf("mpesa: decode response: %v", err)
 	}
