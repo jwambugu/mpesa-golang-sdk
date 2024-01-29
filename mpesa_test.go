@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/stretchr/testify/require"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -23,10 +24,7 @@ const (
 )
 
 func TestMpesa_GenerateAccessToken(t *testing.T) {
-	var (
-		asserts = assert.New(t)
-		ctx     = context.Background()
-	)
+	ctx := context.Background()
 
 	tests := []struct {
 		name string
@@ -44,14 +42,14 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 				})
 
 				token, err := app.GenerateAccessToken(ctx)
-				asserts.NoError(err)
-				asserts.NotEmpty(token)
-				asserts.Equal(token, app.cache[testConsumerKey].AccessToken)
+				require.NoError(t, err)
+				require.NotEmpty(t, token)
+				require.Equal(t, token, app.cache[testConsumerKey].AccessToken)
 
 				// Make subsequent call to get the token from the cache
 				token, err = app.GenerateAccessToken(ctx)
-				asserts.NoError(err)
-				asserts.Equal(token, app.cache[testConsumerKey].AccessToken)
+				require.NoError(t, err)
+				require.Equal(t, token, app.cache[testConsumerKey].AccessToken)
 			},
 		},
 		{
@@ -62,8 +60,8 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 				})
 
 				token, err := app.GenerateAccessToken(ctx)
-				asserts.NotNil(err)
-				asserts.Empty(token)
+				require.NotNil(t, err)
+				require.Empty(t, token)
 			},
 		},
 		{
@@ -80,11 +78,11 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 				})
 
 				token, err := app.GenerateAccessToken(ctx)
-				asserts.NoError(err)
-				asserts.NotEmpty(t, token)
+				require.NoError(t, err)
+				require.NotEmpty(t, token)
 
 				gotCachedData := app.cache[testConsumerKey]
-				asserts.Equal(token, gotCachedData.AccessToken)
+				require.Equal(t, token, gotCachedData.AccessToken)
 
 				// Alter the time the cache was set to simulate an expired cache
 				gotCachedData.setAt = time.Now().Add(-1 * time.Hour)
@@ -100,9 +98,9 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 
 				// Make subsequent call to get the token from the cache
 				token, err = app.GenerateAccessToken(ctx)
-				asserts.NoError(err)
-				asserts.Equal(token, app.cache[testConsumerKey].AccessToken)
-				asserts.NotEqual(t, oldToken, app.cache[testConsumerKey].AccessToken)
+				require.NoError(t, err)
+				require.Equal(t, token, app.cache[testConsumerKey].AccessToken)
+				require.NotEqual(t, oldToken, app.cache[testConsumerKey].AccessToken)
 			},
 		},
 		{
@@ -113,8 +111,8 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 				})
 
 				token, err := app.GenerateAccessToken(ctx)
-				asserts.NotNil(err)
-				asserts.Empty(token)
+				require.NotNil(t, err)
+				require.Empty(t, token)
 			},
 		},
 	}
@@ -126,7 +124,7 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 
 			var (
 				cl  = newMockHttpClient()
-				app = NewApp(cl, testConsumerKey, testConsumerSecret, Sandbox)
+				app = NewApp(cl, testConsumerKey, testConsumerSecret, EnvironmentSandbox)
 			)
 
 			tc.mock(t, app, cl)
@@ -135,10 +133,8 @@ func TestMpesa_GenerateAccessToken(t *testing.T) {
 }
 
 func TestMpesa_STKPush(t *testing.T) {
-	var (
-		asserts = assert.New(t)
-		ctx     = context.Background()
-	)
+
+	ctx := context.Background()
 
 	tests := []struct {
 		name   string
@@ -164,21 +160,21 @@ func TestMpesa_STKPush(t *testing.T) {
 				c.MockRequest(app.stkPushURL, func() (status int, body string) {
 					req := c.requests[1]
 
-					asserts.Equal("application/json", req.Header.Get("Content-Type"))
+					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
 					wantAuthorizationHeader := `Bearer ` + app.cache[testConsumerKey].AccessToken
-					asserts.Equal(wantAuthorizationHeader, req.Header.Get("Authorization"))
+					require.Equal(t, wantAuthorizationHeader, req.Header.Get("Authorization"))
 
 					var reqParams STKPushRequest
 					err := json.NewDecoder(req.Body).Decode(&reqParams)
-					asserts.NoError(err)
+					require.NoError(t, err)
 
 					timestamp := time.Now().Format("20060102150405")
 					wantPassword := fmt.Sprintf("%d%s%s", stkReq.BusinessShortCode, passkey, timestamp)
 
 					gotPassword := make([]byte, base64.StdEncoding.DecodedLen(len(reqParams.Password)))
 					n, err := base64.StdEncoding.Decode(gotPassword, []byte(reqParams.Password))
-					asserts.NoError(err)
-					asserts.Equal(wantPassword, string(gotPassword[:n]))
+					require.NoError(t, err)
+					require.Equal(t, wantPassword, string(gotPassword[:n]))
 
 					return http.StatusOK, `
 						{
@@ -191,9 +187,9 @@ func TestMpesa_STKPush(t *testing.T) {
 				})
 
 				res, err := app.STKPush(ctx, passkey, stkReq)
-				asserts.NoError(err)
-				asserts.NotNil(res)
-				asserts.Contains(res.CustomerMessage, "Success. Request accepted for processing")
+				require.NoError(t, err)
+				require.NotNil(t, res)
+				require.Contains(t, res.CustomerMessage, "Success. Request accepted for processing")
 			},
 		},
 		{
@@ -222,8 +218,8 @@ func TestMpesa_STKPush(t *testing.T) {
 				})
 
 				res, err := app.STKPush(ctx, passkey, stkReq)
-				asserts.Error(err)
-				asserts.Nil(res)
+				require.Error(t, err)
+				require.Nil(t, res)
 			},
 		},
 	}
@@ -235,7 +231,7 @@ func TestMpesa_STKPush(t *testing.T) {
 
 			var (
 				cl  = newMockHttpClient()
-				app = NewApp(cl, testConsumerKey, testConsumerSecret, Sandbox)
+				app = NewApp(cl, testConsumerKey, testConsumerSecret, EnvironmentSandbox)
 			)
 
 			cl.MockRequest(app.authURL, func() (status int, body string) {
@@ -249,24 +245,21 @@ func TestMpesa_STKPush(t *testing.T) {
 			tc.mock(t, app, cl, tc.stkReq)
 
 			_, err := app.GenerateAccessToken(ctx)
-			asserts.NoError(err)
-			asserts.Len(cl.requests, 2)
+			require.NoError(t, err)
+			require.Len(t, cl.requests, 2)
 		})
 	}
 }
 
 func TestUnmarshalSTKPushCallback(t *testing.T) {
-	var (
-		asserts = assert.New(t)
-	)
-
 	tests := []struct {
 		name  string
-		input interface{}
+		input func(t *testing.T) io.Reader
 	}{
 		{
 			name: "it can unmarshal a successful transaction callback string",
-			input: `{
+			input: func(_ *testing.T) io.Reader {
+				return strings.NewReader(`{
 			   "Body":{
 				  "stkCallback":{
 					 "MerchantRequestID":"29115-34620561-1",
@@ -295,19 +288,27 @@ func TestUnmarshalSTKPushCallback(t *testing.T) {
 					 }
 				  }
 			   }
-			}`,
+			}`)
+			},
 		},
 		{
 			name: "it can unmarshal an unsuccessful transaction callback struct",
-			input: STKPushCallback{
-				Body: STKPushCallbackBody{
-					STKCallback: STKCallback{
-						MerchantRequestID: "29115-34620561-1",
-						CheckoutRequestID: "ws_CO_191220191020363925",
-						ResultCode:        1032,
-						ResultDesc:        "Request cancelled by user.",
+			input: func(t *testing.T) io.Reader {
+				callback := STKPushCallback{
+					Body: STKPushCallbackBody{
+						STKCallback: STKCallback{
+							MerchantRequestID: "29115-34620561-1",
+							CheckoutRequestID: "ws_CO_191220191020363925",
+							ResultCode:        1032,
+							ResultDesc:        "Request cancelled by user.",
+						},
 					},
-				},
+				}
+
+				b, err := json.Marshal(callback)
+				require.NoError(t, err)
+
+				return strings.NewReader(string(b))
 			},
 		},
 	}
@@ -317,10 +318,10 @@ func TestUnmarshalSTKPushCallback(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			callback, err := UnmarshalSTKPushCallback(tc.input)
-			asserts.NoError(err)
-			asserts.NotNil(callback)
-			asserts.Equal("ws_CO_191220191020363925", callback.Body.STKCallback.CheckoutRequestID)
+			callback, err := UnmarshalSTKPushCallback(tc.input(t))
+			require.NoError(t, err)
+			require.NotNil(t, callback)
+			require.Equal(t, "ws_CO_191220191020363925", callback.Body.STKCallback.CheckoutRequestID)
 		})
 	}
 }
@@ -350,20 +351,20 @@ func TestMpesa_B2C(t *testing.T) {
 				ResultURL:       "https://example.com",
 				Occasion:        "Test Occasion",
 			},
-			env: Sandbox,
+			env: EnvironmentSandbox,
 			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, b2cReq B2CRequest) {
 				c.MockRequest(app.b2cURL, func() (status int, body string) {
 					req := c.requests[1]
 
-					asserts.Equal("application/json", req.Header.Get("Content-Type"))
+					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
 					wantAuthorizationHeader := `Bearer ` + app.cache[testConsumerKey].AccessToken
-					asserts.Equal(wantAuthorizationHeader, req.Header.Get("Authorization"))
+					require.Equal(t, wantAuthorizationHeader, req.Header.Get("Authorization"))
 
 					var reqParams B2CRequest
 					err := json.NewDecoder(req.Body).Decode(&reqParams)
-					asserts.NoError(err)
+					require.NoError(t, err)
 					asserts.NotEmpty(reqParams.SecurityCredential)
-					asserts.Equal(b2cReq.InitiatorName, reqParams.InitiatorName)
+					require.Equal(t, b2cReq.InitiatorName, reqParams.InitiatorName)
 
 					return http.StatusOK, `
 					{    
@@ -375,9 +376,9 @@ func TestMpesa_B2C(t *testing.T) {
 				})
 
 				res, err := app.B2C(ctx, "random-string", b2cReq)
-				asserts.NoError(err)
-				asserts.NotNil(res)
-				asserts.Contains(res.ResponseDescription, "Accept the service request successfully")
+				require.NoError(t, err)
+				require.NotNil(t, res)
+				require.Contains(t, res.ResponseDescription, "Accept the service request successfully")
 			},
 		},
 		{
@@ -393,14 +394,14 @@ func TestMpesa_B2C(t *testing.T) {
 				ResultURL:       "https://example.com",
 				Occasion:        "Test Occasion",
 			},
-			env: Production,
+			env: EnvironmentProduction,
 			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, b2cReq B2CRequest) {
 				c.MockRequest(app.b2cURL, func() (status int, body string) {
 					req := c.requests[1]
 
 					var reqParams B2CRequest
 					err := json.NewDecoder(req.Body).Decode(&reqParams)
-					asserts.NoError(err)
+					require.NoError(t, err)
 					asserts.NotEmpty(t, reqParams.SecurityCredential)
 
 					return http.StatusOK, `
@@ -413,9 +414,9 @@ func TestMpesa_B2C(t *testing.T) {
 				})
 
 				res, err := app.B2C(ctx, "random-string", b2cReq)
-				asserts.NoError(err)
-				asserts.NotNil(res)
-				asserts.Contains(res.ResponseDescription, "Accept the service request successfully")
+				require.NoError(t, err)
+				require.NotNil(t, res)
+				require.Contains(t, res.ResponseDescription, "Accept the service request successfully")
 			},
 		},
 		{
@@ -431,7 +432,7 @@ func TestMpesa_B2C(t *testing.T) {
 				ResultURL:       "https://example.com",
 				Occasion:        "Test Occasion",
 			},
-			env: Production,
+			env: EnvironmentProduction,
 			mock: func(t *testing.T, app *Mpesa, c *mockHttpClient, b2cReq B2CRequest) {
 				c.MockRequest(app.b2cURL, func() (status int, body string) {
 					return http.StatusBadRequest, `
@@ -443,9 +444,9 @@ func TestMpesa_B2C(t *testing.T) {
 				})
 
 				res, err := app.B2C(ctx, "random-string", b2cReq)
-				asserts.Error(err)
-				asserts.Contains(err.Error(), "Invalid Access Token")
-				asserts.Nil(res)
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "Invalid Access Token")
+				require.Nil(t, res)
 			},
 		},
 	}
@@ -471,23 +472,22 @@ func TestMpesa_B2C(t *testing.T) {
 			tc.mock(t, app, cl, tc.b2cReq)
 
 			_, err := app.GenerateAccessToken(ctx)
-			asserts.NoError(err)
-			asserts.Len(cl.requests, 2)
+			require.NoError(t, err)
+			require.Len(t, cl.requests, 2)
 		})
 	}
 }
 
 func TestUnmarshalCallback(t *testing.T) {
-	asserts := assert.New(t)
-
 	tests := []struct {
 		name           string
-		input          interface{}
+		input          func(t *testing.T) io.Reader
 		wantResultCode int
 	}{
 		{
 			name: "it can unmarshal a successful b2c callback string",
-			input: `
+			input: func(t *testing.T) io.Reader {
+				return strings.NewReader(`
 			{    
 			   "Result": {
 				  "ResultType": 0,
@@ -539,32 +539,41 @@ func TestUnmarshalCallback(t *testing.T) {
 					  }
 				  }
 			   }
-			}`,
+			}`)
+			},
 			wantResultCode: 0,
 		},
 		{
 			name: "it can unmarshal an unsuccessful request callback struct",
-			input: Callback{
-				Result: CallbackResult{
-					ResultType:               0,
-					ResultCode:               2001,
-					ResultDesc:               "The initiator information is invalid.",
-					OriginatorConversationID: "10571-7910404-1",
-					ConversationID:           "AG_20191219_00004e48cf7e3533f581",
-					TransactionID:            "NLJ41HAY6Q",
-					ReferenceData: ReferenceData{
-						ReferenceItem: ReferenceItem{
-							Key:   "QueueTimeoutURL",
-							Value: "https:\\/\\/internalsandbox.safaricom.co.ke\\/mpesa\\/b2cresults\\/v1\\/submit",
+			input: func(t *testing.T) io.Reader {
+				callback := Callback{
+					Result: CallbackResult{
+						ResultType:               0,
+						ResultCode:               2001,
+						ResultDesc:               "The initiator information is invalid.",
+						OriginatorConversationID: "10571-7910404-1",
+						ConversationID:           "AG_20191219_00004e48cf7e3533f581",
+						TransactionID:            "NLJ41HAY6Q",
+						ReferenceData: ReferenceData{
+							ReferenceItem: ReferenceItem{
+								Key:   "QueueTimeoutURL",
+								Value: "https:\\/\\/internalsandbox.safaricom.co.ke\\/mpesa\\/b2cresults\\/v1\\/submit",
+							},
 						},
 					},
-				},
+				}
+
+				b, err := json.Marshal(callback)
+				require.NoError(t, err)
+
+				return strings.NewReader(string(b))
 			},
 			wantResultCode: 2001,
 		},
 		{
 			name: "it can unmarshal a successfull account balance request callback",
-			input: `
+			input: func(t *testing.T) io.Reader {
+				return strings.NewReader(`
 			{
 			  "Result": {
 				"ResultType": 0,
@@ -596,7 +605,8 @@ func TestUnmarshalCallback(t *testing.T) {
 				  }
 				}
 			  }
-			}`,
+			}`)
+			},
 			wantResultCode: 0,
 		},
 	}
@@ -604,22 +614,19 @@ func TestUnmarshalCallback(t *testing.T) {
 	for _, tc := range tests {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			callback, err := UnmarshalCallback(tc.input)
-			asserts.NoError(err)
-			asserts.NotNil(callback)
-			asserts.Equal("AG_20191219_00004e48cf7e3533f581", callback.Result.ConversationID)
-			asserts.Equal("10571-7910404-1", callback.Result.OriginatorConversationID)
-			asserts.Equal("QueueTimeoutURL", callback.Result.ReferenceData.ReferenceItem.Key)
-			asserts.Equal(tc.wantResultCode, callback.Result.ResultCode)
+			callback, err := UnmarshalCallback(tc.input(t))
+			require.NoError(t, err)
+			require.NotNil(t, callback)
+			require.Equal(t, "AG_20191219_00004e48cf7e3533f581", callback.Result.ConversationID)
+			require.Equal(t, "10571-7910404-1", callback.Result.OriginatorConversationID)
+			require.Equal(t, "QueueTimeoutURL", callback.Result.ReferenceData.ReferenceItem.Key)
+			require.Equal(t, tc.wantResultCode, callback.Result.ResultCode)
 		})
 	}
 }
 
 func TestMpesa_STKPushQuery(t *testing.T) {
-	var (
-		asserts = assert.New(t)
-		ctx     = context.Background()
-	)
+	ctx := context.Background()
 
 	tests := []struct {
 		name string
@@ -633,21 +640,21 @@ func TestMpesa_STKPushQuery(t *testing.T) {
 				c.MockRequest(app.stkPushQueryURL, func() (status int, body string) {
 					req := c.requests[1]
 
-					asserts.Equal("application/json", req.Header.Get("Content-Type"))
+					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
 					wantAuthorizationHeader := `Bearer ` + app.cache[testConsumerKey].AccessToken
-					asserts.Equal(wantAuthorizationHeader, req.Header.Get("Authorization"))
+					require.Equal(t, wantAuthorizationHeader, req.Header.Get("Authorization"))
 
 					var reqParams STKQueryRequest
 					err := json.NewDecoder(req.Body).Decode(&reqParams)
-					asserts.NoError(err)
+					require.NoError(t, err)
 
 					timestamp := time.Now().Format("20060102150405")
 					wantPassword := fmt.Sprintf("%d%s%s", stkReq.BusinessShortCode, passkey, timestamp)
 
 					gotPassword := make([]byte, base64.StdEncoding.DecodedLen(len(reqParams.Password)))
 					n, err := base64.StdEncoding.Decode(gotPassword, []byte(reqParams.Password))
-					asserts.NoError(err)
-					asserts.Equal(wantPassword, string(gotPassword[:n]))
+					require.NoError(t, err)
+					require.Equal(t, wantPassword, string(gotPassword[:n]))
 
 					return http.StatusOK, `
 						{
@@ -661,9 +668,9 @@ func TestMpesa_STKPushQuery(t *testing.T) {
 				})
 
 				res, err := app.STKQuery(ctx, passkey, stkReq)
-				asserts.NoError(err)
-				asserts.NotNil(res)
-				asserts.Contains(res.CustomerMessage, "Request accepted")
+				require.NoError(t, err)
+				require.NotNil(t, res)
+				require.Contains(t, res.CustomerMessage, "Request accepted")
 			},
 		},
 		{
@@ -681,9 +688,9 @@ func TestMpesa_STKPushQuery(t *testing.T) {
 				})
 
 				res, err := app.STKQuery(ctx, passkey, stkReq)
-				asserts.Error(err)
-				asserts.Contains(err.Error(), "error code 500.001.1001:The transaction is being processed")
-				asserts.Nil(res)
+				require.Error(t, err)
+				require.Contains(t, err.Error(), "code 500.001.1001: The transaction is being processed")
+				require.Nil(t, res)
 			},
 		},
 	}
@@ -694,7 +701,7 @@ func TestMpesa_STKPushQuery(t *testing.T) {
 			t.Parallel()
 
 			cl := newMockHttpClient()
-			app := NewApp(cl, testConsumerKey, testConsumerSecret, Sandbox)
+			app := NewApp(cl, testConsumerKey, testConsumerSecret, EnvironmentSandbox)
 
 			cl.MockRequest(app.authURL, func() (status int, body string) {
 				return http.StatusOK, `
@@ -705,7 +712,7 @@ func TestMpesa_STKPushQuery(t *testing.T) {
 			})
 
 			_, err := app.GenerateAccessToken(ctx)
-			asserts.NoError(err)
+			require.NoError(t, err)
 
 			tc.mock(t, app, cl, STKQueryRequest{
 				BusinessShortCode: 174379,
@@ -716,10 +723,7 @@ func TestMpesa_STKPushQuery(t *testing.T) {
 }
 
 func Test_RegisterC2BURL(t *testing.T) {
-	var (
-		asserts = assert.New(t)
-		ctx     = context.Background()
-	)
+	ctx := context.Background()
 
 	tests := []struct {
 		name       string
@@ -729,7 +733,7 @@ func Test_RegisterC2BURL(t *testing.T) {
 	}{
 		{
 			name: "it should register URLs in sanbox",
-			env:  Sandbox,
+			env:  EnvironmentSandbox,
 			c2bRequest: RegisterC2BURLRequest{
 				ShortCode:       600638,
 				ResponseType:    "Completed",
@@ -740,13 +744,13 @@ func Test_RegisterC2BURL(t *testing.T) {
 				c.MockRequest(app.c2bURL, func() (status int, body string) {
 					req := c.requests[1]
 
-					asserts.Equal("application/json", req.Header.Get("Content-Type"))
+					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
 					wantAuthorizationHeader := `Bearer ` + app.cache[testConsumerKey].AccessToken
-					asserts.Equal(wantAuthorizationHeader, req.Header.Get("Authorization"))
+					require.Equal(t, wantAuthorizationHeader, req.Header.Get("Authorization"))
 
 					var reqParams RegisterC2BURLRequest
 					err := json.NewDecoder(req.Body).Decode(&reqParams)
-					asserts.NoError(err)
+					require.NoError(t, err)
 
 					return http.StatusOK, `
 						{
@@ -757,14 +761,14 @@ func Test_RegisterC2BURL(t *testing.T) {
 				})
 
 				res, err := app.RegisterC2BURL(ctx, c2bRequest)
-				asserts.NoError(err)
-				asserts.NotNil(res)
-				asserts.Equal(res.ResponseDescription, "success")
+				require.NoError(t, err)
+				require.NotNil(t, res)
+				require.Equal(t, res.ResponseDescription, "success")
 			},
 		},
 		{
 			name: "it should register URLs in production",
-			env:  Production,
+			env:  EnvironmentProduction,
 			c2bRequest: RegisterC2BURLRequest{
 				ShortCode:       200200,
 				ResponseType:    "Canceled",
@@ -775,13 +779,13 @@ func Test_RegisterC2BURL(t *testing.T) {
 				c.MockRequest(app.c2bURL, func() (status int, body string) {
 					req := c.requests[1]
 
-					asserts.Equal("application/json", req.Header.Get("Content-Type"))
+					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
 					wantAuthorizationHeader := `Bearer ` + app.cache[testConsumerKey].AccessToken
-					asserts.Equal(wantAuthorizationHeader, req.Header.Get("Authorization"))
+					require.Equal(t, wantAuthorizationHeader, req.Header.Get("Authorization"))
 
 					var reqParams RegisterC2BURLRequest
 					err := json.NewDecoder(req.Body).Decode(&reqParams)
-					asserts.NoError(err)
+					require.NoError(t, err)
 
 					return http.StatusOK, `
 						{
@@ -792,9 +796,9 @@ func Test_RegisterC2BURL(t *testing.T) {
 				})
 
 				res, err := app.RegisterC2BURL(ctx, c2bRequest)
-				asserts.NoError(err)
-				asserts.NotNil(res)
-				asserts.Equal(res.ResponseDescription, "success")
+				require.NoError(t, err)
+				require.NotNil(t, res)
+				require.Equal(t, res.ResponseDescription, "success")
 			},
 		},
 		{
@@ -804,9 +808,9 @@ func Test_RegisterC2BURL(t *testing.T) {
 			},
 			mock: func(t *testing.T, ctx context.Context, app *Mpesa, c *mockHttpClient, c2bRequest RegisterC2BURLRequest) {
 				res, err := app.RegisterC2BURL(ctx, c2bRequest)
-				asserts.Error(err)
-				asserts.Equal(err.Error(), "mpesa: the provided ResponseType [Foo] is not valid")
-				asserts.Nil(res)
+				require.Error(t, err)
+				require.Equal(t, err.Error(), "mpesa: the provided ResponseType [Foo] is not valid")
+				require.Nil(t, res)
 			},
 		},
 	}
@@ -849,9 +853,9 @@ func TestMpesa_DynamicQR(t *testing.T) {
 				c.MockRequest(app.dynamicQRURL, func() (status int, body string) {
 					req := c.requests[1]
 
-					asserts.Equal("application/json", req.Header.Get("Content-Type"))
+					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
 					wantAuthorizationHeader := `Bearer ` + app.cache[testConsumerKey].AccessToken
-					asserts.Equal(wantAuthorizationHeader, req.Header.Get("Authorization"))
+					require.Equal(t, wantAuthorizationHeader, req.Header.Get("Authorization"))
 
 					return http.StatusOK, `
 						{
@@ -862,9 +866,9 @@ func TestMpesa_DynamicQR(t *testing.T) {
 				})
 
 				resp, err := app.DynamicQR(ctx, qrReq, PayMerchantBuyGoods, false)
-				asserts.NoError(err)
-				asserts.NotNil(resp)
-				asserts.Equal("00", resp.ResponseCode)
+				require.NoError(t, err)
+				require.NotNil(t, resp)
+				require.Equal(t, "00", resp.ResponseCode)
 			},
 		},
 		{
@@ -873,9 +877,9 @@ func TestMpesa_DynamicQR(t *testing.T) {
 				c.MockRequest(app.dynamicQRURL, func() (status int, body string) {
 					req := c.requests[1]
 
-					asserts.Equal("application/json", req.Header.Get("Content-Type"))
+					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
 					wantAuthorizationHeader := `Bearer ` + app.cache[testConsumerKey].AccessToken
-					asserts.Equal(wantAuthorizationHeader, req.Header.Get("Authorization"))
+					require.Equal(t, wantAuthorizationHeader, req.Header.Get("Authorization"))
 
 					return http.StatusOK, `
 						{
@@ -886,19 +890,19 @@ func TestMpesa_DynamicQR(t *testing.T) {
 				})
 
 				resp, err := app.DynamicQR(ctx, qrReq, PayMerchantBuyGoods, true)
-				asserts.NoError(err)
-				asserts.NotNil(resp)
+				require.NoError(t, err)
+				require.NotNil(t, resp)
 
 				defer func() {
 					err = os.Remove(resp.ImagePath)
-					asserts.NoError(err)
+					require.NoError(t, err)
 				}()
 
-				asserts.Equal("00", resp.ResponseCode)
+				require.Equal(t, "00", resp.ResponseCode)
 				asserts.NotEmpty(resp.ImagePath)
 
 				wd, err := os.Getwd()
-				asserts.NoError(err)
+				require.NoError(t, err)
 
 				imagesDir := filepath.Join(wd, "storage", "images")
 				amountStr := strconv.Itoa(int(qrReq.Amount))
@@ -906,10 +910,10 @@ func TestMpesa_DynamicQR(t *testing.T) {
 				wantFilename := qrReq.MerchantName + "_" + amountStr + "_" + qrReq.CreditPartyIdentifier + ".png"
 				wantFilename = imagesDir + "/" + strings.ReplaceAll(wantFilename, " ", "_")
 
-				asserts.Equal(wantFilename, resp.ImagePath)
+				require.Equal(t, wantFilename, resp.ImagePath)
 
 				_, err = os.Stat(resp.ImagePath)
-				asserts.NoError(err)
+				require.NoError(t, err)
 			},
 		},
 		{
@@ -918,9 +922,9 @@ func TestMpesa_DynamicQR(t *testing.T) {
 				c.MockRequest(app.dynamicQRURL, func() (status int, body string) {
 					req := c.requests[1]
 
-					asserts.Equal("application/json", req.Header.Get("Content-Type"))
+					require.Equal(t, "application/json", req.Header.Get("Content-Type"))
 					wantAuthorizationHeader := `Bearer ` + app.cache[testConsumerKey].AccessToken
-					asserts.Equal(wantAuthorizationHeader, req.Header.Get("Authorization"))
+					require.Equal(t, wantAuthorizationHeader, req.Header.Get("Authorization"))
 
 					return http.StatusBadRequest, `
 						{
@@ -931,8 +935,8 @@ func TestMpesa_DynamicQR(t *testing.T) {
 				})
 
 				resp, err := app.DynamicQR(ctx, qrReq, "PayMerchantBuyGoods", true)
-				asserts.Error(err)
-				asserts.Nil(resp)
+				require.Error(t, err)
+				require.Nil(t, resp)
 			},
 		},
 	}
@@ -944,7 +948,7 @@ func TestMpesa_DynamicQR(t *testing.T) {
 
 			var (
 				cl  = newMockHttpClient()
-				app = NewApp(cl, testConsumerKey, testConsumerSecret, Sandbox)
+				app = NewApp(cl, testConsumerKey, testConsumerSecret, EnvironmentSandbox)
 			)
 
 			cl.MockRequest(app.authURL, func() (status int, body string) {
@@ -956,7 +960,7 @@ func TestMpesa_DynamicQR(t *testing.T) {
 			})
 
 			_, err := app.GenerateAccessToken(ctx)
-			asserts.NoError(err)
+			require.NoError(t, err)
 
 			tc.mock(app, cl, DynamicQRRequest{
 				Amount:                10,
@@ -984,7 +988,7 @@ func TestMpesa_GetTransactionStatus(t *testing.T) {
 	}{
 		{
 			name: "it generates valid security credentials and makes the request successfully on sandbox",
-			env:  Sandbox,
+			env:  EnvironmentSandbox,
 			txnStatusReq: TransactionStatusRequest{
 				Initiator:       "testapi",
 				Occasion:        "Test",
@@ -1025,7 +1029,7 @@ func TestMpesa_GetTransactionStatus(t *testing.T) {
 		},
 		{
 			name: "it generates valid security credentials and makes the request successfully on production",
-			env:  Production,
+			env:  EnvironmentProduction,
 			txnStatusReq: TransactionStatusRequest{
 				Initiator:       "testapi",
 				Occasion:        "Test",
@@ -1170,7 +1174,7 @@ func TestMpesa_GetAccountBalance(t *testing.T) {
 	}{
 		{
 			name: "generates valid security credentials and makes the request successfully on sandbox",
-			env:  Sandbox,
+			env:  EnvironmentSandbox,
 			accountBalanceReq: AccountBalanceRequest{
 				Initiator:       "testapi",
 				PartyA:          600981,
@@ -1209,7 +1213,7 @@ func TestMpesa_GetAccountBalance(t *testing.T) {
 		},
 		{
 			name: "generates valid security credentials and makes the request successfully on production",
-			env:  Production,
+			env:  EnvironmentProduction,
 			accountBalanceReq: AccountBalanceRequest{
 				Initiator:       "testapi",
 				PartyA:          600981,

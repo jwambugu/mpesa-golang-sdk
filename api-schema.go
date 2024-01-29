@@ -97,8 +97,8 @@ type (
 		TransactionDesc string `json:"TransactionDesc"`
 	}
 
-	// GeneralRequestResponse is the response sent back by mpesa after initiating a request.
-	GeneralRequestResponse struct {
+	// Response is the response sent back by mpesa after initiating a request.
+	Response struct {
 		// CheckoutRequestID is a global unique identifier of the processed checkout transaction request.
 		// Example: ws_CO_DMZ_12321_23423476
 		CheckoutRequestID string `json:"CheckoutRequestID,omitempty"`
@@ -158,11 +158,11 @@ type (
 
 	STKCallback struct {
 		// MerchantRequestID is a global unique Identifier for any submitted payment request. It is the same
-		// value returned to the acknowledgement message on the GeneralRequestResponse.
+		// value returned to the acknowledgement message on the Response.
 		MerchantRequestID string `json:"MerchantRequestID"`
 
 		// CheckoutRequestID is a global unique identifier of the processed checkout transaction request.
-		// It is the same value returned to the acknowledgement message on the GeneralRequestResponse.
+		// It is the same value returned to the acknowledgement message on the Response.
 		CheckoutRequestID string `json:"CheckoutRequestID"`
 
 		// ResultCode is a numeric status code that indicates the status of the transaction processing.
@@ -341,7 +341,7 @@ type (
 		//your endpoint is unreachable or is unable to respond on time. Only two values are allowed: Completed or Cancelled.
 		// Completed means M-PESA will automatically complete your transaction, whereas Cancelled means M-PESA will
 		// automatically cancel the transaction, in the event M-PESA is unable to reach your Validation URL.
-		ResponseType string `json:"ResponseType"`
+		ResponseType ResponseType `json:"ResponseType"`
 
 		// ConfirmationURL is the URL that receives the confirmation request from API upon payment completion.
 		ConfirmationURL string `json:"ConfirmationURL"`

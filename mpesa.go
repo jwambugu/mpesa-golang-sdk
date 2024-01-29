@@ -24,18 +24,22 @@ import (
 	"time"
 )
 
-// Environment indicates the current mode the application is running on. Either Sandbox or Production.
+// Environment indicates the current mode the application is running on. Either EnvironmentSandbox or EnvironmentProduction.
 type Environment uint8
 
 // cache stores the AuthorizationResponse for the specified accessTokenTTL
 type cache map[string]AuthorizationResponse
 
 const (
-	Sandbox Environment = iota
-	Production
+	EnvironmentSandbox Environment = iota
+	EnvironmentProduction
+)
 
-	ResponseTypeComplete string = "Completed"
-	ResponseTypeCanceled string = "Canceled"
+type ResponseType string
+
+const (
+	ResponseTypeCanceled ResponseType = "Canceled"
+	ResponseTypeComplete ResponseType = "Completed"
 )
 
 var accessTokenTTL = 55 * time.Minute
@@ -45,7 +49,7 @@ const requiredURLScheme = "https"
 
 // IsProduction returns true if the current env is set to production.
 func (e Environment) IsProduction() bool {
-	return e == Production
+	return e == EnvironmentProduction
 }
 
 type HttpClient interface {
@@ -76,7 +80,10 @@ type Mpesa struct {
 }
 
 var (
-	ErrInvalidPasskey           = errors.New("mpesa: passkey cannot be empty")
+	// ErrInvalidPasskey indicates that no passkey was provided.
+	ErrInvalidPasskey = errors.New("mpesa: passkey cannot be empty")
+
+	// ErrInvalidInitiatorPassword indicates that no initiator password was provided.
 	ErrInvalidInitiatorPassword = errors.New("mpesa: initiator password cannot be empty")
 )
 
@@ -108,7 +115,7 @@ func NewApp(c HttpClient, consumerKey, consumerSecret string, env Environment) *
 	}
 
 	baseUrl := sandboxBaseURL
-	if env == Production {
+	if env == EnvironmentProduction {
 		baseUrl = productionBaseURL
 	}
 
@@ -131,21 +138,26 @@ func NewApp(c HttpClient, consumerKey, consumerSecret string, env Environment) *
 	}
 }
 
+// generateTimestampAndPassword returns the current timestamp in the format YYYYMMDDHHmmss and a base64 encoded
+// password in the format shortcode+passkey+timestamp
 func generateTimestampAndPassword(shortcode uint, passkey string) (string, string) {
 	timestamp := time.Now().Format("20060102150405")
 	password := fmt.Sprintf("%d%s%s", shortcode, passkey, timestamp)
 	return timestamp, base64.StdEncoding.EncodeToString([]byte(password))
 }
 
-func (m *Mpesa) makeHttpRequestWithToken(ctx context.Context, method, url string, body interface{}) (*http.Response, error) {
+// makeHttpRequestWithToken makes an API call to the provided url using the provided http method.
+func (m *Mpesa) makeHttpRequestWithToken(
+	ctx context.Context, method, url string, body interface{},
+) (*http.Response, error) {
 	reqBody, err := json.Marshal(body)
 	if err != nil {
-		return nil, fmt.Errorf("mpesa: error marshling request payload - %v", err)
+		return nil, fmt.Errorf("mpesa: marshal request: %v", err)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, method, url, bytes.NewBuffer(reqBody))
 	if err != nil {
-		return nil, fmt.Errorf("mpesa: error creating request - %v", err)
+		return nil, fmt.Errorf("mpesa: create request: %v", err)
 	}
 
 	accessToken, err := m.GenerateAccessToken(ctx)
@@ -158,7 +170,7 @@ func (m *Mpesa) makeHttpRequestWithToken(ctx context.Context, method, url string
 
 	res, err := m.client.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("mpesa: error making request - %v", err)
+		return nil, fmt.Errorf("mpesa: make request: %v", err)
 	}
 
 	return res, nil
@@ -184,26 +196,26 @@ func (m *Mpesa) GenerateAccessToken(ctx context.Context) (string, error) {
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, m.authURL, nil)
 	if err != nil {
-		return "", fmt.Errorf("mpesa: error creating authorization http request - %v", err)
+		return "", fmt.Errorf("mpesa: create auth request: %v", err)
 	}
 
 	req.SetBasicAuth(m.consumerKey, m.consumerSecret)
 
 	res, err := m.client.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("mpesa: error making authorization http request - %v", err)
+		return "", fmt.Errorf("mpesa: make auth request: %v", err)
 	}
 
 	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
 	if res.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("mpesa: authorization request failed with status - %v", res.Status)
+		return "", fmt.Errorf("mpesa: auth failed with status: %v", res.Status)
 	}
 
 	var response AuthorizationResponse
 	if err := json.NewDecoder(res.Body).Decode(&response); err != nil {
-		return "", fmt.Errorf("mpesa: error decoding authorization response - %v", err)
+		return "", fmt.Errorf("mpesa: decode auth response: %v", err)
 	}
 
 	response.setAt = time.Now()
@@ -212,7 +224,7 @@ func (m *Mpesa) GenerateAccessToken(ctx context.Context) (string, error) {
 }
 
 // STKPush initiates online payment on behalf of a customer using STKPush.
-func (m *Mpesa) STKPush(ctx context.Context, passkey string, req STKPushRequest) (*GeneralRequestResponse, error) {
+func (m *Mpesa) STKPush(ctx context.Context, passkey string, req STKPushRequest) (*Response, error) {
 	if passkey == "" {
 		return nil, ErrInvalidPasskey
 	}
@@ -227,17 +239,14 @@ func (m *Mpesa) STKPush(ctx context.Context, passkey string, req STKPushRequest)
 	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
-	var resp GeneralRequestResponse
+	var resp Response
 	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
-		return nil, fmt.Errorf("mpesa: error decoding stk push request response - %v", err)
+		return nil, fmt.Errorf("mpesa: decode response : %v", err)
 	}
 
-	if resp.ErrorCode != "" {
+	if res.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf(
-			"mpesa: stk push request ID %v failed with error code %v:%v",
-			resp.RequestID,
-			resp.ErrorCode,
-			resp.ErrorMessage,
+			"mpesa: request %v failed with code %v: %v", resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
 		)
 	}
 
@@ -245,15 +254,10 @@ func (m *Mpesa) STKPush(ctx context.Context, passkey string, req STKPushRequest)
 }
 
 // UnmarshalSTKPushCallback decodes the provided value to STKPushCallback.
-func UnmarshalSTKPushCallback(in interface{}) (*STKPushCallback, error) {
-	b, err := toBytes(in)
-	if err != nil {
-		return nil, fmt.Errorf("mpesa: error unmarshing input - %v", err)
-	}
-
+func UnmarshalSTKPushCallback(r io.Reader) (*STKPushCallback, error) {
 	var callback STKPushCallback
-	if err := json.Unmarshal(b, &callback); err != nil {
-		return nil, fmt.Errorf("mpesa: error unmarshling stk push callback - %v", err)
+	if err := json.NewDecoder(r).Decode(&callback); err != nil {
+		return nil, fmt.Errorf("mpesa: decode: %v", err)
 	}
 
 	return &callback, nil
@@ -267,7 +271,7 @@ func (m *Mpesa) generateSecurityCredentials(initiatorPwd string) (string, error)
 
 	publicKey, err := certFS.ReadFile(certPath)
 	if err != nil {
-		return "", fmt.Errorf("mpesa: error opening cert %v - %v", certPath, err)
+		return "", fmt.Errorf("mpesa: read cert: %v", err)
 	}
 
 	block, _ := pem.Decode(publicKey)
@@ -275,21 +279,21 @@ func (m *Mpesa) generateSecurityCredentials(initiatorPwd string) (string, error)
 	var cert *x509.Certificate
 	cert, err = x509.ParseCertificate(block.Bytes)
 	if err != nil {
-		return "", fmt.Errorf("mpesa: error parsing cert %v - %v", certPath, err)
+		return "", fmt.Errorf("mpesa:parse cert: %v", err)
 	}
 
 	rsaPublicKey := cert.PublicKey.(*rsa.PublicKey)
 	reader := rand.Reader
 	signature, err := rsa.EncryptPKCS1v15(reader, rsaPublicKey, []byte(initiatorPwd))
 	if err != nil {
-		return "", fmt.Errorf("mpesa: error encrypting initiator password: %v", err)
+		return "", fmt.Errorf("mpesa: encrypt password: %v", err)
 	}
 
 	return base64.StdEncoding.EncodeToString(signature), nil
 }
 
 // B2C transacts between an M-Pesa short code to a phone number registered on M-Pesa
-func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*GeneralRequestResponse, error) {
+func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*Response, error) {
 	if initiatorPwd == "" {
 		return nil, ErrInvalidInitiatorPassword
 	}
@@ -309,17 +313,14 @@ func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*
 	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
-	var resp GeneralRequestResponse
+	var resp Response
 	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
-		return nil, fmt.Errorf("mpesa: error decoding b2c request response - %v", err)
+		return nil, fmt.Errorf("mpesa: decode response: %v", err)
 	}
 
-	if resp.ErrorCode != "" {
+	if res.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf(
-			"mpesa: b2c request ID %v failed with error code %v:%v",
-			resp.RequestID,
-			resp.ErrorCode,
-			resp.ErrorMessage,
+			"mpesa: request %v failed with code %v: %v", resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
 		)
 	}
 
@@ -327,22 +328,17 @@ func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*
 }
 
 // UnmarshalCallback decodes the provided value to Callback
-func UnmarshalCallback(in interface{}) (*Callback, error) {
-	b, err := toBytes(in)
-	if err != nil {
-		return nil, fmt.Errorf("mpesa: error unmarshing input - %v", err)
-	}
-
+func UnmarshalCallback(r io.Reader) (*Callback, error) {
 	var callback Callback
-	if err := json.Unmarshal(b, &callback); err != nil {
-		return nil, fmt.Errorf("mpesa: error unmarshling stk push callback - %v", err)
+	if err := json.NewDecoder(r).Decode(&callback); err != nil {
+		return nil, fmt.Errorf("mpesa: decode: %v", err)
 	}
 
 	return &callback, nil
 }
 
 // STKQuery checks the status of an STKPush payment.
-func (m *Mpesa) STKQuery(ctx context.Context, passkey string, req STKQueryRequest) (*GeneralRequestResponse, error) {
+func (m *Mpesa) STKQuery(ctx context.Context, passkey string, req STKQueryRequest) (*Response, error) {
 	if passkey == "" {
 		return nil, ErrInvalidPasskey
 	}
@@ -357,15 +353,14 @@ func (m *Mpesa) STKQuery(ctx context.Context, passkey string, req STKQueryReques
 	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
-	var resp GeneralRequestResponse
+	var resp Response
 	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
-		return nil, fmt.Errorf("mpesa: error decoding stk push query request response - %v", err)
+		return nil, fmt.Errorf("mpesa: decode response: %v", err)
 	}
 
-	if resp.ErrorCode != "" {
+	if res.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf(
-			"mpesa: stk push query request ID %v failed with error code %v:%v",
-			resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
+			"mpesa: request %v failed with code %v: %v", resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
 		)
 	}
 
@@ -378,21 +373,21 @@ func (m *Mpesa) STKQuery(ctx context.Context, passkey string, req STKQueryReques
 // Validation URL: This is the URL that is only used when a Merchant (Partner) requires to validate the details of the payment before accepting.
 // For example, a bank would want to verify if an account number exists in their platform before accepting a payment from the customer.
 // Confirmation URL:  This is the URL that receives payment notification once payment has been completed successfully on M-PESA.
-func (m *Mpesa) RegisterC2BURL(ctx context.Context, req RegisterC2BURLRequest) (*GeneralRequestResponse, error) {
+func (m *Mpesa) RegisterC2BURL(ctx context.Context, req RegisterC2BURLRequest) (*Response, error) {
 	switch req.ResponseType {
 	case ResponseTypeComplete, ResponseTypeCanceled:
 		response, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.c2bURL, req)
 		if err != nil {
-			return nil, errors.Join(errors.New("mpesa: c2b url validation failed"), err)
+			return nil, err
 		}
 		defer func(body io.ReadCloser) {
 			_ = body.Close()
 		}(response.Body)
 
-		var result GeneralRequestResponse
-		err = json.NewDecoder(response.Body).Decode(&result)
-		if err != nil {
-			return nil, errors.Join(errors.New("mpesa: could not unmarshall c2b response body"), err)
+		var result Response
+
+		if err = json.NewDecoder(response.Body).Decode(&result); err != nil {
+			return nil, fmt.Errorf("mpesa: decode response: %v", err)
 		}
 
 		return &result, nil
@@ -420,12 +415,12 @@ func (m *Mpesa) DynamicQR(
 
 	var resp *DynamicQRResponse
 	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
-		return nil, fmt.Errorf("mpesa: error decoding dynamic QR response - %v", err)
+		return nil, fmt.Errorf("mpesa: decode response: %v", err)
 	}
 
-	if resp.ErrorCode != "" {
-		return nil, fmt.Errorf("mpesa: dynamic QR request ID %v failed with error code %v:%v",
-			resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
+	if res.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf(
+			"mpesa: request %v failed with code %v: %v", resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
 		)
 	}
 
@@ -437,18 +432,18 @@ func (m *Mpesa) DynamicQR(
 
 	image, err := png.Decode(reader)
 	if err != nil {
-		return nil, fmt.Errorf("mpesa: failed to decode png: %v", err)
+		return nil, fmt.Errorf("mpesa: decode png: %v", err)
 	}
 
 	wd, err := os.Getwd()
 	if err != nil {
-		return nil, fmt.Errorf("mpesa: failed to get working dir: %v", err)
+		return nil, fmt.Errorf("mpesa: wd: %v", err)
 	}
 
 	imagesDir := filepath.Join(wd, "storage", "images")
 	if _, err := os.Stat(imagesDir); os.IsNotExist(err) {
 		if err = os.Mkdir(imagesDir, os.ModePerm); err != nil {
-			return nil, fmt.Errorf("mpesa: failed to create images dir: %v", err)
+			return nil, fmt.Errorf("mpesa: create images dir: %v", err)
 		}
 	}
 
@@ -458,12 +453,12 @@ func (m *Mpesa) DynamicQR(
 
 	f, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE, 0755)
 	if err != nil {
-		return nil, fmt.Errorf("mpesa: failed to open png file: %v", err)
+		return nil, fmt.Errorf("mpesa: open png: %v", err)
 
 	}
 
 	if err = png.Encode(f, image); err != nil {
-		return nil, fmt.Errorf("mpesa: failed to encode png: %v", err)
+		return nil, fmt.Errorf("mpesa: encode png: %v", err)
 	}
 
 	resp.ImagePath = filename
@@ -473,7 +468,7 @@ func (m *Mpesa) DynamicQR(
 // GetTransactionStatus checks the status of a transaction
 func (m *Mpesa) GetTransactionStatus(
 	ctx context.Context, initiatorPwd string, req TransactionStatusRequest,
-) (*GeneralRequestResponse, error) {
+) (*Response, error) {
 	if initiatorPwd == "" {
 		return nil, ErrInvalidInitiatorPassword
 	}
@@ -503,15 +498,14 @@ func (m *Mpesa) GetTransactionStatus(
 	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
-	var resp GeneralRequestResponse
+	var resp Response
 	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
-		return nil, fmt.Errorf("mpesa: failed to decode transaction status request response: %v", err)
+		return nil, fmt.Errorf("mpesa: decode response: %v", err)
 	}
 
-	if resp.ErrorCode != "" {
+	if res.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf(
-			"mpesa: transaction status request ID %v failed with error code %v: %v",
-			resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
+			"mpesa: request %v failed with code %v: %v", resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
 		)
 	}
 
@@ -522,7 +516,7 @@ func (m *Mpesa) GetTransactionStatus(
 // accounts.
 func (m *Mpesa) GetAccountBalance(
 	ctx context.Context, initiatorPwd string, req AccountBalanceRequest,
-) (*GeneralRequestResponse, error) {
+) (*Response, error) {
 	if initiatorPwd == "" {
 		return nil, ErrInvalidInitiatorPassword
 	}
@@ -552,12 +546,12 @@ func (m *Mpesa) GetAccountBalance(
 	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
-	var resp GeneralRequestResponse
+	var resp Response
 	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
 		return nil, fmt.Errorf("mpesa: decode response: %v", err)
 	}
 
-	if resp.ErrorCode != "" {
+	if res.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf(
 			"mpesa: request %v failed with code %v: %v", resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
 		)
