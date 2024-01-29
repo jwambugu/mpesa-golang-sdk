@@ -139,6 +139,11 @@ func (m *Mpesa) endpointB2C() string {
 	return m.Environment().BaseURL() + `/mpesa/b2c/v1/paymentrequest`
 }
 
+// endpointBusinessPayBill returns the Business Pay Bill endpoint prefixed with the current Environment base URL
+func (m *Mpesa) endpointBusinessPayBill() string {
+	return m.Environment().BaseURL() + `/mpesa/b2b/v1/paymentrequest`
+}
+
 // endpointB2C returns the endpoint to register C2B callbacks prefixed with the current Environment base URL
 func (m *Mpesa) endpointC2BRegister() string {
 	return m.Environment().BaseURL() + `/mpesa/c2b/v1/registerurl`
@@ -265,18 +270,7 @@ func (m *Mpesa) STKPush(ctx context.Context, passkey string, req STKPushRequest)
 	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
-	var resp Response
-	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
-		return nil, fmt.Errorf("mpesa: decode response : %v", err)
-	}
-
-	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf(
-			"mpesa: request %v failed with code %v: %v", resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
-		)
-	}
-
-	return &resp, nil
+	return decodeResponse(res)
 }
 
 // UnmarshalSTKPushCallback decodes the provided value to STKPushCallback.
@@ -339,18 +333,7 @@ func (m *Mpesa) B2C(ctx context.Context, initiatorPwd string, req B2CRequest) (*
 	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
-	var resp Response
-	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
-		return nil, fmt.Errorf("mpesa: decode response: %v", err)
-	}
-
-	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf(
-			"mpesa: request %v failed with code %v: %v", resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
-		)
-	}
-
-	return &resp, nil
+	return decodeResponse(res)
 }
 
 // UnmarshalCallback decodes the provided value to Callback
@@ -379,18 +362,7 @@ func (m *Mpesa) STKQuery(ctx context.Context, passkey string, req STKQueryReques
 	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
-	var resp Response
-	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
-		return nil, fmt.Errorf("mpesa: decode response: %v", err)
-	}
-
-	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf(
-			"mpesa: request %v failed with code %v: %v", resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
-		)
-	}
-
-	return &resp, nil
+	return decodeResponse(res)
 }
 
 // RegisterC2BURL API works hand in hand with Customer to Business (C2B) APIs and allows receiving payment notifications to your paybill.
@@ -410,13 +382,7 @@ func (m *Mpesa) RegisterC2BURL(ctx context.Context, req RegisterC2BURLRequest) (
 			_ = body.Close()
 		}(response.Body)
 
-		var result Response
-
-		if err = json.NewDecoder(response.Body).Decode(&result); err != nil {
-			return nil, fmt.Errorf("mpesa: decode response: %v", err)
-		}
-
-		return &result, nil
+		return decodeResponse(response)
 	default:
 		return nil, fmt.Errorf("mpesa: the provided ResponseType [%s] is not valid", req.ResponseType)
 	}
@@ -514,7 +480,7 @@ func (m *Mpesa) GetTransactionStatus(
 
 	req.SecurityCredential = securityCredential
 	req.CommandID = TransactionStatusQuery
-	req.IdentifierType = Shortcode
+	req.IdentifierType = ShortcodeIdentifierType
 
 	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.endpointTransactionStatus(), req)
 	if err != nil {
@@ -524,18 +490,7 @@ func (m *Mpesa) GetTransactionStatus(
 	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
-	var resp Response
-	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
-		return nil, fmt.Errorf("mpesa: decode response: %v", err)
-	}
-
-	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf(
-			"mpesa: request %v failed with code %v: %v", resp.RequestID, resp.ErrorCode, resp.ErrorMessage,
-		)
-	}
-
-	return &resp, nil
+	return decodeResponse(res)
 }
 
 // GetAccountBalance fetches the account balance of a short code. This can be used for both B2C, buy goods and pay bill
@@ -562,7 +517,7 @@ func (m *Mpesa) GetAccountBalance(
 
 	req.SecurityCredential = securityCredential
 	req.CommandID = AccountBalance
-	req.IdentifierType = Shortcode
+	req.IdentifierType = ShortcodeIdentifierType
 
 	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.endpointAccountBalance(), req)
 	if err != nil {
@@ -572,8 +527,49 @@ func (m *Mpesa) GetAccountBalance(
 	//goland:noinspection GoUnhandledErrorResult
 	defer res.Body.Close()
 
+	return decodeResponse(res)
+}
+
+// BusinessPayBill API enables you to pay bills directly from your business account to a pay bill number, or a paybill
+// store. You can use this API to pay on behalf of a consumer/requester.
+//
+// The transaction moves money from your MMF/Working account to the recipient’s utility account.
+func (m *Mpesa) BusinessPayBill(ctx context.Context, initiatorPwd string, req BusinessPayBillRequest) (*Response, error) {
+	if initiatorPwd == "" {
+		return nil, ErrInvalidInitiatorPassword
+	}
+
+	if err := validateURL(req.QueueTimeOutURL); err != nil {
+		return nil, err
+	}
+
+	if err := validateURL(req.ResultURL); err != nil {
+		return nil, err
+	}
+
+	securityCredential, err := m.generateSecurityCredentials(initiatorPwd)
+	if err != nil {
+		return nil, err
+	}
+
+	req.SecurityCredential = securityCredential
+	req.RecieverIdentifierType = ShortcodeIdentifierType
+	req.SenderIdentifierType = ShortcodeIdentifierType
+
+	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.endpointBusinessPayBill(), req)
+	if err != nil {
+		return nil, err
+	}
+
+	//goland:noinspection GoUnhandledErrorResult
+	defer res.Body.Close()
+
+	return decodeResponse(res)
+}
+
+func decodeResponse(res *http.Response) (*Response, error) {
 	var resp Response
-	if err = json.NewDecoder(res.Body).Decode(&resp); err != nil {
+	if err := json.NewDecoder(res.Body).Decode(&resp); err != nil {
 		return nil, fmt.Errorf("mpesa: decode response: %v", err)
 	}
 
