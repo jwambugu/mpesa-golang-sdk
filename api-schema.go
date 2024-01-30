@@ -7,11 +7,10 @@ type DynamicQRTransactionType string
 
 const (
 	PayMerchantBuyGoods      DynamicQRTransactionType = "BG"
-	WithdrawCashAtAgentTill  DynamicQRTransactionType = "WA"
 	PaybillOrBusinessNumber  DynamicQRTransactionType = "PB"
 	SendMoneyViaMobileNumber DynamicQRTransactionType = "SM"
-	// SentToBusiness - Use Business number CPI in MSISDN format.
-	SentToBusiness DynamicQRTransactionType = "SB"
+	SentToBusiness           DynamicQRTransactionType = "SB"
+	WithdrawCashAtAgentTill  DynamicQRTransactionType = "WA"
 )
 
 // CommandID is a unique command that specifies B2C transaction type.
@@ -20,6 +19,9 @@ type CommandID string
 const (
 	// AccountBalance command ID is applied when getting the account balance of a shortcode
 	AccountBalance CommandID = "AccountBalance"
+
+	// BusinessPayBill coomand ID is applied for BusinessPayBillRequest
+	BusinessPayBill CommandID = "BusinessPayBill"
 
 	// BusinessPayment is a normal business to customer payment, supports only M-PESA registered customers.
 	BusinessPayment CommandID = "BusinessPayment"
@@ -38,7 +40,7 @@ const (
 // IdentifierType is the type of organization receiving the transaction
 type IdentifierType uint8
 
-const Shortcode IdentifierType = 4
+const ShortcodeIdentifierType IdentifierType = 4
 
 type (
 	// AuthorizationResponse is returned when trying to authenticate the app using provided credentials
@@ -415,7 +417,6 @@ type (
 
 		// Occasion is an optional paramater that is a sequence of characters up to 100
 		Occasion string `json:"Occasion"`
-		//OriginatorConversationID string `json:"OriginatorConversationID"`
 
 		// OriginatorConversationID is a global unique identifier for the transaction request returned by the API proxy
 		// upon successful request submission. If you don’t have the M-PESA transaction ID you can use this to query.
@@ -468,5 +469,53 @@ type (
 
 		// SecurityCredential is an encrypted password for the initiator to authenticate the request
 		SecurityCredential string `json:"SecurityCredential"`
+	}
+
+	BusinessPayBillRequest struct {
+		// AccountReference is account number to be associated with the payment. Up to 13 characters.
+		AccountReference string `json:"AccountReference"`
+
+		// Amount is the transaction amount.
+		Amount uint `json:"Amount"`
+
+		// The CommandID for the request - BusinessPayBill
+		CommandID CommandID `json:"CommandID"`
+
+		// Initiator is the credential/username used to authenticate the request.
+		Initiator string `json:"Initiator"`
+
+		// Occasion is an optional paramater that is a sequence of characters up to 100
+		Occasion string `json:"Occasion"`
+
+		// PartyA is your shortcode. The shortcode from which money will be deducted.
+		PartyA uint `json:"PartyA"`
+
+		// PartyB is the shortcode to which money will be moved to.
+		PartyB uint `json:"PartyB"`
+
+		// QueueTimeOutURL is the endpoint that will be used by API Proxy to send notification incase the request is
+		//timed out while awaiting processing in the queue. Must be served via https.
+		QueueTimeOutURL string `json:"QueueTimeOutURL"`
+
+		// RecieverIdentifierType is the type of shortcode to which money is credited. This API supports type
+		// ShortcodeIdentifierType only
+		RecieverIdentifierType IdentifierType `json:"RecieverIdentifierType"`
+
+		// Remarks are comments that are sent along with the transaction. They are a sequence of characters up to 100
+		Remarks string `json:"Remarks"`
+
+		// Optional. Requester is the consumer’s mobile number on behalf of whom you are paying.
+		Requester int64 `json:"Requester"`
+
+		// ResultURL is the endpoint that will be used by M-PESA to send notification upon processing of the request.
+		// Must be served via https.
+		ResultURL string `json:"ResultURL"`
+
+		// SecurityCredential is an encrypted password for the initiator to authenticate the request
+		SecurityCredential string `json:"SecurityCredential"`
+
+		// SenderIdentifierType is the type of shortcode from which money is deducted.
+		// For this API, only ShortcodeIdentifierType is allowed
+		SenderIdentifierType IdentifierType `json:"SenderIdentifierType"`
 	}
 )
