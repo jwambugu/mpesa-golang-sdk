@@ -553,6 +553,7 @@ func (m *Mpesa) BusinessPayBill(ctx context.Context, initiatorPwd string, req Bu
 	}
 
 	req.SecurityCredential = securityCredential
+	req.CommandID = BusinessPayBill
 	req.RecieverIdentifierType = ShortcodeIdentifierType
 	req.SenderIdentifierType = ShortcodeIdentifierType
 
