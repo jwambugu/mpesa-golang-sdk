@@ -992,7 +992,7 @@ func TestMpesa_GetTransactionStatus(t *testing.T) {
 			txnStatusReq: TransactionStatusRequest{
 				Initiator:       "testapi",
 				Occasion:        "Test",
-				PartyA:          "600426",
+				PartyA:          600426,
 				QueueTimeOutURL: "https://example.com/",
 				Remarks:         "Test remarks",
 				ResultURL:       "https://example.com/",
@@ -1033,7 +1033,7 @@ func TestMpesa_GetTransactionStatus(t *testing.T) {
 			txnStatusReq: TransactionStatusRequest{
 				Initiator:       "testapi",
 				Occasion:        "Test",
-				PartyA:          "600426",
+				PartyA:          600426,
 				QueueTimeOutURL: "https://example.com/",
 				Remarks:         "Test remarks",
 				ResultURL:       "https://example.com/",
@@ -1108,7 +1108,7 @@ func TestMpesa_GetTransactionStatus(t *testing.T) {
 			txnStatusReq: TransactionStatusRequest{
 				Initiator:       "testapi",
 				Occasion:        "Test",
-				PartyA:          "600426",
+				PartyA:          600426,
 				QueueTimeOutURL: "https://example.com/",
 				Remarks:         "Test remarks",
 				ResultURL:       "https://example.com/",
@@ -1383,7 +1383,7 @@ func TestMpesa_BusinessPayBill(t *testing.T) {
 					require.NotEmpty(t, reqParams.SecurityCredential) // TODO: verify the security credential
 					require.Equal(t, ShortcodeIdentifierType, reqParams.RecieverIdentifierType)
 					require.Equal(t, ShortcodeIdentifierType, reqParams.SenderIdentifierType)
-					require.Equal(t, BusinessPayBill, reqParams.CommandID)
+					require.Equal(t, BusinessPayBillCommandID, reqParams.CommandID)
 
 					return http.StatusOK, `{
 						"OriginatorConversationID": "2ba8-4165-beca-292db11f9ef878061",

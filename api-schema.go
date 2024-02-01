@@ -17,30 +17,41 @@ const (
 type CommandID string
 
 const (
-	// AccountBalance command ID is applied when getting the account balance of a shortcode
-	AccountBalance CommandID = "AccountBalance"
+	// AccountBalanceCommandID is applied when getting the account balance of a shortcode
+	AccountBalanceCommandID CommandID = "AccountBalance"
 
-	// BusinessPayBill coomand ID is applied for BusinessPayBillRequest
-	BusinessPayBill CommandID = "BusinessPayBill"
+	// BusinessPayBillCommandID is applied for BusinessPayBillRequest
+	BusinessPayBillCommandID CommandID = "BusinessPayBill"
 
-	// BusinessPayment is a normal business to customer payment, supports only M-PESA registered customers.
-	BusinessPayment CommandID = "BusinessPayment"
+	// BusinessPaymentCommandID is a normal business to customer payment, supports only M-PESA registered customers.
+	BusinessPaymentCommandID CommandID = "BusinessPayment"
 
-	// PromotionPayment is a promotional payment to customers. The M-PESA notification message is a congratulatory
+	// PromotionPaymentCommandID is a promotional payment to customers. The M-PESA notification message is a congratulatory
 	// message. Supports only M-PESA registered customers.
-	PromotionPayment CommandID = "PromotionPayment"
+	PromotionPaymentCommandID CommandID = "PromotionPayment"
 
-	// SalaryPayment command is used for sending money to both registered and unregistered M-Pesa customers.
-	SalaryPayment CommandID = "SalaryPayment"
+	// SalaryPaymentCommandID is used for sending money to both registered and unregistered M-Pesa customers.
+	SalaryPaymentCommandID CommandID = "SalaryPayment"
 
-	// TransactionStatusQuery command ID is applied when getting the status of a transaction.
-	TransactionStatusQuery CommandID = "TransactionStatusQuery"
+	// TransactionStatusQueryCommandID is applied when getting the status of a transaction.
+	TransactionStatusQueryCommandID CommandID = "TransactionStatusQuery"
 )
 
 // IdentifierType is the type of organization receiving the transaction
 type IdentifierType uint8
 
 const ShortcodeIdentifierType IdentifierType = 4
+
+// TransactionType is used ti identify the type of the transaction being made.
+type TransactionType string
+
+const (
+	// CustomerBuyGoodsOnlineTransactionType us used to STK push requests for till numbers.
+	CustomerBuyGoodsOnlineTransactionType = "CustomerBuyGoodsOnline"
+
+	// CustomerPayBillOnlineTransactionType us used to STK push requests for paybill numbers.
+	CustomerPayBillOnlineTransactionType = "CustomerPayBillOnline"
+)
 
 type (
 	// AuthorizationResponse is returned when trying to authenticate the app using provided credentials
@@ -69,7 +80,7 @@ type (
 
 		// TransactionType identifies the transaction when sending the request to M-Pesa. Expects CustomerPayBillOnline
 		// or CustomerBuyGoodsOnline
-		TransactionType string `json:"TransactionType"`
+		TransactionType TransactionType `json:"TransactionType"`
 
 		// Amount to be transacted which will be deducted from the customer.
 		Amount uint `json:"Amount,omitempty"`
@@ -227,9 +238,9 @@ type (
 
 		/*
 			CommandID is a unique command that specifies B2C transaction type.
-				- SalaryPayment: This supports sending money to both registered and unregistered M-Pesa customers.
-				- BusinessPayment: This is a normal business to customer payment,supports only M-Pesa registered customers.
-				- PromotionPayment: This is a promotional payment to customers. The M-Pesa notification message is a
+				- SalaryPaymentCommandID: This supports sending money to both registered and unregistered M-Pesa customers.
+				- BusinessPaymentCommandID: This is a normal business to customer payment,supports only M-Pesa registered customers.
+				- PromotionPaymentCommandID: This is a promotional payment to customers. The M-Pesa notification message is a
 				congratulatory message and supports only M-Pesa registered customers.
 		*/
 		CommandID CommandID `json:"CommandID"`
@@ -406,7 +417,7 @@ type (
 	}
 
 	TransactionStatusRequest struct {
-		// The CommandID for the request - TransactionStatusQuery
+		// The CommandID for the request - TransactionStatusQueryCommandID
 		CommandID CommandID `json:"CommandID"`
 
 		// IdentifierType is the type of organization receiving the transaction
@@ -423,7 +434,7 @@ type (
 		OriginatorConversationID string `json:"OriginatorConversationID,omitempty"`
 
 		// PartyA is an Organization/MSISDN receiving the transaction. Shortcode (6-9 digits) MSISDN (12 Digits)
-		PartyA string `json:"PartyA"`
+		PartyA uint `json:"PartyA"`
 
 		// QueueTimeOutURL is the endpoint that will be used by API Proxy to send notification incase the request is timed
 		// out while awaiting processing in the queue. Must be served via https.
@@ -444,7 +455,7 @@ type (
 	}
 
 	AccountBalanceRequest struct {
-		// The CommandID for the request - AccountBalance
+		// The CommandID for the request - AccountBalanceCommandID
 		CommandID CommandID `json:"CommandID"`
 
 		// IdentifierType is the type of organization fetching the balance - Shortcode (Till Number Organization shortcode)
@@ -478,7 +489,7 @@ type (
 		// Amount is the transaction amount.
 		Amount uint `json:"Amount"`
 
-		// The CommandID for the request - BusinessPayBill
+		// The CommandID for the request - BusinessPayBillCommandID
 		CommandID CommandID `json:"CommandID"`
 
 		// Initiator is the credential/username used to authenticate the request.

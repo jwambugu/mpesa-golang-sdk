@@ -479,7 +479,7 @@ func (m *Mpesa) GetTransactionStatus(
 	}
 
 	req.SecurityCredential = securityCredential
-	req.CommandID = TransactionStatusQuery
+	req.CommandID = TransactionStatusQueryCommandID
 	req.IdentifierType = ShortcodeIdentifierType
 
 	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.endpointTransactionStatus(), req)
@@ -516,7 +516,7 @@ func (m *Mpesa) GetAccountBalance(
 	}
 
 	req.SecurityCredential = securityCredential
-	req.CommandID = AccountBalance
+	req.CommandID = AccountBalanceCommandID
 	req.IdentifierType = ShortcodeIdentifierType
 
 	res, err := m.makeHttpRequestWithToken(ctx, http.MethodPost, m.endpointAccountBalance(), req)
@@ -553,7 +553,7 @@ func (m *Mpesa) BusinessPayBill(ctx context.Context, initiatorPwd string, req Bu
 	}
 
 	req.SecurityCredential = securityCredential
-	req.CommandID = BusinessPayBill
+	req.CommandID = BusinessPayBillCommandID
 	req.RecieverIdentifierType = ShortcodeIdentifierType
 	req.SenderIdentifierType = ShortcodeIdentifierType
 
