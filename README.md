@@ -38,7 +38,7 @@ The SDK supports the following environments:
 
 ### Examples
 
-More examples can be found [here](https://github.com/jwambugu/mpesa-golang-sdk/examples)
+More examples can be found [here](https://github.com/jwambugu/mpesa-golang-sdk/tree/main/examples)
 
 ```go
 package main
