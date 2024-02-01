@@ -2,12 +2,16 @@
 
 Mpesa Golang SDK facilitates in integrating M-pesa APIS into your go project. The following APIs are currently supported:
 
-| API                                                                                       | Description                                                                   |
-|-------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------|
-| [Authorization](https://developer.safaricom.co.ke/APIs/Authorization)                     | Generates an access token for authenticating APIs                             |
-| [Lipa Na M-Pesa Online API](https://developer.safaricom.co.ke/APIs/MpesaExpressSimulate)  | Initiates online payment on behalf of a customer.                             |
-| [Business To Customer  (B2C) ](https://developer.safaricom.co.ke/APIs/BusinessToCustomer) | Transact between an M-Pesa short code to a phone number registered on M-Pesa. |
-| [M-Pesa Express Query](https://sandbox.safaricom.co.ke/mpesa/stkpushquery/v1/query)       | Check the status of a Lipa Na M-Pesa Online Payment.                          |
+| API                                                                                       | Description                                                                                                                                                                                                                                                                              |
+|-------------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [Authorization](https://developer.safaricom.co.ke/APIs/Authorization)                     | Generates an access token for authenticating APIs                                                                                                                                                                                                                                        |
+| [Lipa Na M-Pesa Online API](https://developer.safaricom.co.ke/APIs/MpesaExpressSimulate)  | Initiates online payment on behalf of a customer.                                                                                                                                                                                                                                        |
+| [Business To Customer  (B2C) ](https://developer.safaricom.co.ke/APIs/BusinessToCustomer) | Transact between an M-Pesa short code to a phone number registered on M-Pesa.                                                                                                                                                                                                            |
+| [M-Pesa Express Query](https://developer.safaricom.co.ke/APIs/MpesaExpressQuery)          | Check the status of a Lipa Na M-Pesa Online Payment.                                                                                                                                                                                                                                     |
+| [Dynamic QR](https://developer.safaricom.co.ke/APIs/DynamicQRCode)                        | Generates a dynamic M-PESA QR Code which enables Safaricom M-PESA customers who have My Safaricom App or M-PESA app, to scan a QR (Quick Response) code, to capture till number and amount then authorize to pay for goods and services at select LIPA NA M-PESA (LNM) merchant outlets. |
+| [Transaction Status](https://developer.safaricom.co.ke/APIs/TransactionStatus)            | Check the status of a transaction.                                                                                                                                                                                                                                                       |
+| [Account Balance](https://developer.safaricom.co.ke/APIs/AccountBalance)                  | Enquire the balance on an M-Pesa BuyGoods (Till Number).                                                                                                                                                                                                                                 |
+| [Business Pay Bill](https://developer.safaricom.co.ke/APIs/BusinessPayBill)               | This API enables you to pay bills directly from your business account to a pay bill number, or a paybill store.                                                                                                                                                                          |
 
 ## Getting Started
 
@@ -34,6 +38,8 @@ The SDK supports the following environments:
 
 ### Examples
 
+More examples can be found [here](https://github.com/jwambugu/mpesa-golang-sdk/examples)
+
 ```go
 package main
 
@@ -46,75 +52,51 @@ import (
 )
 
 func main() {
-    ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-    defer cancel()
-    
-    mpesaApp := mpesa.NewApp(http.DefaultClient, "CONSUMER_KEY_GOES_HERE", "CONSUMER_SECRET_GOES_HERE", mpesa.Sandbox)
-    
-    stkPushRes, err := mpesaApp.STKPush(ctx, "PASSKEY_GOES_HERE", mpesa.STKPushRequest{
-        BusinessShortCode: 174379,
-        TransactionType:   "CustomerPayBillOnline",
-        Amount:            10,
-        PartyA:            254708374149,
-        PartyB:            174379,
-        PhoneNumber:       254708374149,
-        CallBackURL:       "https://example.com",
-        AccountReference:  "Test",
-        TransactionDesc:   "Test Request",
-    })
-    
-    if err != nil {
-        log.Fatalln(err)
-    }
-    
-    log.Printf("%+v", stkPushRes)
-    
-    b2cRes, err := mpesaApp.B2C(ctx, "INITIATOR_PASSWORD_GOES_HERE", mpesa.B2CRequest{
-        InitiatorName:   "TestG2Init",
-        CommandID:       "BusinessPayment",
-        Amount:          10,
-        PartyA:          600123,
-        PartyB:          254728762287,
-        Remarks:         "This is a remark",
-        QueueTimeOutURL: "https://example.com",
-        ResultURL:       "https://example.com",
-        Occasion:        "Test Occasion",
-    })
-    
-    if err != nil {
-        log.Fatalln(err)
-    }
-    
-    log.Printf("%+v", b2cRes)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
 
-    stkQueryRes, err := mpesaApp.STKQuery(ctx, "PASSKEY_GOES_HERE", mpesa.STKQueryRequest{
-        BusinessShortCode: 174379,
-        CheckoutRequestID: "ws_CO_03082022131319635708374149", // STK PUSH CheckoutRequestID,
-    })
-    
-    if err != nil {
-        log.Fatalln(err)
-    }
-    
-    log.Printf("%+v", stkQueryRes)
+	mpesaApp := mpesa.NewApp(http.DefaultClient, "CONSUMER_KEY", "CONSUMER_SECRET", mpesa.EnvironmentSandbox)
+
+	stkResp, err := mpesaApp.STKPush(ctx, "YOUR_PASSKEY", mpesa.STKPushRequest{
+		BusinessShortCode: 174379,
+		TransactionType:   mpesa.CustomerPayBillOnlineTransactionType,
+		Amount:            10,
+		PartyA:            254708374149,
+		PartyB:            174379,
+		PhoneNumber:       254708374149,
+		CallBackURL:       "https://webhook.site/62daf156-31dc-4b07-ac41-698dbfadaa4b",
+		AccountReference:  "Test reference",
+		TransactionDesc:   "Test description",
+	})
+
+	if err != nil {
+		log.Fatalf("stk: %v\n", err)
+	}
+
+	log.Printf("stk: %+v\n", stkResp)
+
+	stkQueryRes, err := mpesaApp.STKQuery(ctx, "YOUR_PASSKEY", mpesa.STKQueryRequest{
+		BusinessShortCode: 174379,
+		CheckoutRequestID: "ws_CO_260520211133524545",
+	})
+
+	if err != nil {
+		log.Fatalf("stk query: %v\n", err)
+	}
+
+	log.Printf("stk query %+v\n", stkQueryRes)
+
 }
 ```
 
 ### Processing Callbacks
 The SDK adds a helper functions to decode callbacks. These are:
 1. `mpesa.UnmarshalSTKPushCallback(v)`
-2. `mpesa.UnmarshalB2CCallback(v)`
-
-The following types are supported, any other type will be decoded using `json.Unmarshal`
-
-| Supported Types |
-|-----------------|
-| string          |
-| *http.Request   |
+2. `mpesa.UnmarshalCallback(v)` for all other callbacks received
 
 ```go
 mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
-    callback, err := mpesa.UnmarshalB2CCallback(r)
+callback, err := mpesa.UnmarshalB2CCallback(r.Body)
     if err != nil {
         log.Fatalln(err)
     }
@@ -123,17 +105,19 @@ mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
 })
 
 
-callback, err := mpesa.UnmarshalSTKPushCallback(`
-{    
-   "Body": {
-      "stkCallback": {
-         "MerchantRequestID": "29115-34620561-1",
-         "CheckoutRequestID": "ws_CO_191220191020363925",
-         "ResultCode": 1032,
-         "ResultDesc": "Request cancelled by user."
-      }
-   }
-}`)
+data := strings.NewReader(`
+	{
+	   "Body": {
+		  "stkCallback": {
+			 "MerchantRequestID": "29115-34620561-1",
+			 "CheckoutRequestID": "ws_CO_191220191020363925",
+			 "ResultCode": 1032,
+			 "ResultDesc": "Request cancelled by user."
+		  }
+	   }
+	}`)
+
+callback, err := mpesa.UnmarshalSTKPushCallback(data)ack()
 
 if err != nil {
     log.Fatalln(err)
